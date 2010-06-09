@@ -18,7 +18,7 @@
 *)
 structure Type = struct
   fun op $ (x,y) = x y; infix 1 $;
-  val op \ = Vector.sub; infix 1 $;
+  val op \ = Vector.sub; infix 1 \;
   exception Undef;
   fun undef () = raise Undef;
   type rnd = Random.rand;
@@ -30,7 +30,7 @@ structure Type = struct
   (* ============================================================== *)
   (* 人間 *)
   type age  = real
-  type time = real (* or int *)
+  type time = int
   datatype gender  = F | M
   datatype role    = Employed | Hausfrau | Student
   datatype health
@@ -58,9 +58,9 @@ structure Type = struct
     | Train of id * area_t
     | Super of id * area_t
     | Park  of id * area_t
-  type place = {id: place_t, nVis: size, size: size, beta: real}
+  type place = {id: place_t, nVis: size ref, size: size, beta: real}
   type mobil = 
-    {id: place_t, nVis: size, size: size, beta: real
+    {id: place_t, nVis: size ref, size: size, beta: real
     ,iSked: int, sked: (time * area_t) vector}
   type person = 
     { age   : age
@@ -68,7 +68,7 @@ structure Type = struct
     , role  : role
     , belong: place_t list
     , visit : place_t
-    , dest  : place_t list
+    , dest  : place_t option
     , health: health list
     }
   (* 中間構造体 *)
@@ -95,6 +95,7 @@ structure Type = struct
   type city =
     {area : area vector  
     ,train: mobil vector
+    ,time : time
     }
   (* アクセサ *)
   fun projHome x = 
@@ -106,10 +107,23 @@ structure Type = struct
     | areaPlace (Super(_,x)) = x
     | areaPlace (Train(_,x)) = x
   fun areaPer ({belong, ...}:person) = areaPlace (projHome belong)
+  fun localPer (p:person) = let
+    val i = areaPer p
+  in
+    List.filter (fn plc => i = areaPlace plc) (#belong p)
+  end
+  fun placeCity (areas: area vector) (p: place_t) = 
+    case p
+      of Home (i,x) => (#home  o #3) (areas \ x) \ i
+       | Corp (i,x) => (#corp  o #3) (areas \ x) \ i
+       | Sch  (i,x) => (#sch   o #3) (areas \ x) \ i
+       | Park (i,x) => (#park  o #3) (areas \ x) \ i
+       | Super(i,x) => (#super o #3) (areas \ x) \ i
+       | Train(i,x) => raise undef () (* unreachable *)
 end
 
 structure Frame = struct
-  open Type; infix 1 $
+  open Type; infix 1 $; infix 1 \;
   open X_Misc;
   open EasyPrint; infix 1 <<
   (* ============================================================== *)
@@ -136,7 +150,7 @@ structure Frame = struct
       ,role   = #role p
       ,visit  = b
       ,belong = b :: nil
-      ,dest   = nil
+      ,dest   = NONE
       ,health = SUS :: nil
       }
 
@@ -161,7 +175,7 @@ structure Frame = struct
         val n = length mem
         val _ = print (fI n)
         val hm = Home (idHome (), area_t)
-        val hmObj = {id = hm, nVis = n, size = n, beta = betaHome}
+        val hmObj = {id = hm, nVis = ref n, size = n, beta = betaHome}
         val mem = map (fn m => ext2 (m,hm)) mem 
       in
         if (not (null pop')) then
@@ -215,8 +229,71 @@ structure Frame = struct
   in
     {area  = Vector.map asg area
     ,train = #[]
+    ,time = 0
     }
   end
+
+  val rnd = Random.rand(0,1)
+
+  fun updatePerson (areas:area vector)(p:person){visit, dest, health} = let
+    val from' = placeCity areas (#visit p)
+    val to'   = placeCity areas visit
+  in
+    ( #nVis from' := !(#nVis from') - 1
+    ; #nVis to'   := !(#nVis to')   + 1
+    ;{ age    = #age p
+     , gender = #gender p
+     , role   = #role p
+     , belong = #belong p
+     , visit  = visit
+     , dest   = dest
+     , health = health
+     }
+    )
+  end
+  fun evalPerson ({area=areas,train,time}:city) (p: person) = let
+    val myArea = areaPer p
+  in
+    case #dest p
+      of NONE => 
+        let
+          val dest = rndSelL rnd (#belong p)
+        in
+          if (areaPlace dest = myArea) then
+            updatePerson areas p {visit = dest, dest = NONE, health = #health p}
+          else            
+            updatePerson areas p {visit = #visit p, dest = SOME dest, health = #health p}
+        end
+      | SOME dest => 
+        ( print "bording train is not implemented!"
+        ; updatePerson areas p {visit = dest, dest = NONE, health = #health p}
+        )
+  end
+
+  fun evalTrain ({time,...}:city) (tr:mobil) = let
+    val (time',area_t') = #sked tr \ (#iSked tr)
+    val Train (id, _) = #id tr
+  in
+    if (time = time') then
+      {id    = Train (id,area_t')
+      ,nVis  = #nVis tr
+      ,size  = #size tr
+      ,beta  = #beta tr
+      ,iSked = (#iSked tr + 1) mod (Vector.length (#sked tr))
+      ,sked  = #sked tr
+      }
+    else
+      tr
+  end
+
+  fun evalArea city (id,pop,places) = 
+    map (evalPerson city) pop
+
+  fun eval1 (city:city) = 
+    {areas = Vector.map (evalArea city) (#area city)
+    ,train = Vector.map (evalTrain city) (#train city)
+    ,time  = #time city + 1
+    }
 end
 
 structure Trivial = struct
@@ -229,7 +306,7 @@ structure Trivial = struct
   open X_Misc;
   open Alice;
   val rnd = Random.rand (0,1);
-  fun rndSelV (v: 'a vector) = 
+  fun rndselV (v: 'a vector) = 
     v \ (Int.mod (Random.randInt rnd, Vector.length v))
 
   fun person (rnd:Random.rand) (id:id) =
@@ -248,7 +325,7 @@ structure Trivial = struct
 
   fun place typ size beta a id  =
     {id = typ (id, a)
-    ,nVis = 0
+    ,nVis = ref 0
     ,size = iR o abs $ rI size + rI size*rgauss rnd
     ,beta = abs (beta + beta*rgauss rnd)
     }
@@ -259,12 +336,12 @@ structure Trivial = struct
   fun belong (areas: area vector)(p: person): place_t list = let
     val i0 = areaPer p
     val (_,_,a0) = areas \ i0
-    val (_,_,a') = rndSelV areas
+    val (_,_,a') = rndselV areas
   in
     case #role p 
-      of Employed => map #id [rndSelV (#corp a') , rndSelV (#super a0)]
-       | Student  => map #id [rndSelV (#sch a0)  , rndSelV (#super a0)]
-       | HausFrau => map #id [rndSelV (#super a0)]
+      of Employed => map #id [rndselV (#corp a') , rndselV (#super a0)]
+       | Student  => map #id [rndselV (#sch a0)  , rndselV (#super a0)]
+       | HausFrau => map #id [rndselV (#super a0)]
   end
 
   fun genArea area_t = 

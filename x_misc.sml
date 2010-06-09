@@ -4,6 +4,7 @@ local
   open Alice
   open EasyPrint; infix 1 <<
 in
+  fun op $ (f,x) = f x; infix 1 $;
   (* 乱数 *)
   fun rgauss rnd = let
     val u1 = Random.randReal rnd
@@ -15,6 +16,14 @@ in
     if (Random.randReal rnd < p) 
       then x
       else y
+  fun rndselV rnd v =
+    Vector.sub(v, Int.mod (Random.randInt rnd, Vector.length v))
+  fun rndSelL rnd l = let
+    val j = Int.mod (Random.randInt rnd, length l)
+    val i = ref 0
+  in
+    valOf o List.find (fn _ => !i = j before i := !i + 1) $ l
+  end
 
   (* ポアソン分布 *)
   fun lnGamma z = 
