@@ -15,10 +15,21 @@
 (5)がシミュレーションに対応する。エージェントの要素は、
 
 「人間」 = 裸の人間 * 社会的役割 * 所属空間 (⊆空間I) * 現在空間 (⊆空間I∪空間II)
+
+---
+可視化
+  GIS = Geographi Information System を調べるとよい。
+    商用ソフト。APIのセットがあったりする。曼荼羅。
+
+戻ってくる表現:
+---------------
+x_t ∈ {Home, Corp, ...}
+p(x_t=Home|x_{t-1}=Corp,t) などを要素とする確率表を与える
 *)
+
 structure Type = struct
   fun op $ (x,y) = x y; infix 1 $;
-  val op \ = Vector.sub; infix 1 \;
+  val op \ = Vector.sub; infix 9 \;
   exception Undef;
   fun undef () = raise Undef;
   type rnd = Random.rand;
@@ -43,13 +54,13 @@ structure Type = struct
   (* 空間 *)
   type id   = int
   type size = int
-  (* datatype area = OCT | TAC | GEO | SIN | TKY *)
+  (* datatype area = HAC | TAC | JOJ | SJK | TKY *)
   (* 数として扱いたいかもしれないので *)
   type area_t = int
-    val OCT = 0:area_t
+    val HAC = 0:area_t
     val TAC = 1:area_t
-    val GEO = 2:area_t
-    val SIN = 3:area_t
+    val JOJ = 2:area_t
+    val SJK = 3:area_t
     val TKY = 4:area_t
   datatype place_t
     = Sch   of id * area_t
@@ -76,7 +87,7 @@ structure Type = struct
     type per2 = {age: age, gender: gender, role: role}
     type per3 = {age: age, gender: gender, role: role, belong: place_t list}
 
-  type places  = 
+  type places = 
     { sch  : place vector
     , corp : place vector
     , park : place vector
@@ -209,6 +220,34 @@ structure Frame = struct
       }
     )
 
+  fun makeTrains 
+    {reqtime: time vector
+    ,services: {deptime:time, from: area_t, to: area_t} vector
+    ,beta: real
+    ,size: size
+    }: mobil vector = 
+  let
+    val idx = cnt ()
+    infix 9 \
+  in
+    Vector.map (fn {deptime, from, to} => 
+        {id    = Train (idx (), 0)
+        ,nVis  = ref 0
+        ,size  = size
+        ,beta  = beta
+        ,iSked = 0
+        ,sked  = 
+          if (to > from) then 
+            (fn s => Vector.tabulate(to - from, 
+              (fn i => (deptime + !s, from + i) before s := !s + reqtime \ (from + i)))
+            )(ref 0)
+          else
+            (fn s => Vector.tabulate(from - to, 
+              (fn i => (deptime + !s, from - i) before s := !s + reqtime \ (from - i - 1)))
+            )(ref 0)
+        }
+    ) services
+  end
 
   fun conArea 
     {area  : area vector
@@ -251,6 +290,7 @@ structure Frame = struct
      }
     )
   end
+
   fun evalPerson ({area=areas,train,time}:city) (p: person) = let
     val myArea = areaPer p
   in
@@ -286,11 +326,14 @@ structure Frame = struct
       tr
   end
 
-  fun evalArea city (id,pop,places) = 
-    map (evalPerson city) pop
+  fun evalArea city ((id,pop,places): area): area = 
+    (id
+    ,map (evalPerson city) pop
+    ,places
+    )
 
   fun eval1 (city:city) = 
-    {areas = Vector.map (evalArea city) (#area city)
+    {area  = Vector.map (evalArea city) (#area city)
     ,train = Vector.map (evalTrain city) (#train city)
     ,time  = #time city + 1
     }
@@ -309,6 +352,8 @@ structure Trivial = struct
   fun rndselV (v: 'a vector) = 
     v \ (Int.mod (Random.randInt rnd, Vector.length v))
 
+  (* 人口分布に似た簡単な分布がある
+   *   クラーク分布 *)
   fun person (rnd:Random.rand) (id:id) =
     {age    = Real.abs (30.0 + 30.0*rgauss rnd)
     ,gender = if Random.randInt rnd > 0 then M else F
@@ -331,7 +376,7 @@ structure Trivial = struct
     }
 
   fun fmRule () = 
-    List.tabulate (1 + iR (abs (5.0 * rgauss rnd)), fn _ => fn _ => true)
+    List.tabulate (1 + iR (abs (2.0 * rgauss rnd)), fn _ => fn _ => true)
 
   fun belong (areas: area vector)(p: person): place_t list = let
     val i0 = areaPer p
@@ -347,14 +392,14 @@ structure Trivial = struct
   fun genArea area_t = 
     F.genArea 
       {area_t = area_t
-      ,nSch   = 3, sch   = place Sch   10 0.1
-      ,nCorp  = 2, corp  = place Corp  50 0.1
-      ,nSuper = 1, super = place Super 20 0.05
-      ,nPark  = 0, park  = place Park   8 0.01
+      ,nSch   = 3, sch   = place Sch  100 0.1
+      ,nCorp  = 5, corp  = place Corp  80 0.1
+      ,nSuper = 1, super = place Super 50 0.05
+      ,nPark  = 1, park  = place Park  50 0.01
       ,popHome = 
         F.genPop 
           {area_t = area_t
-          ,nPop   = 10
+          ,nPop   = 30
           ,person = person rnd
           ,role   = role rnd
           ,fmRule = fmRule
@@ -363,5 +408,5 @@ structure Trivial = struct
   fun conArea areas = F.conArea {area = areas, belong = belong}
 
   fun genCity () =
-    conArea (Vector.map genArea #[OCT, TAC, GEO, SIN, TKY])
+    conArea (Vector.map genArea #[HAC, TAC, JOJ, SJK, TKY])
 end
