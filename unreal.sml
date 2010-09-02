@@ -62,13 +62,17 @@ structure Type = struct
     val JOJ = 2:area_t
     val SJK = 3:area_t
     val TKY = 4:area_t
-  datatype place_t
-    = Sch   of id * area_t
-    | Corp  of id * area_t 
-    | Home  of id * area_t
-    | Train of id * area_t
-    | Super of id * area_t
-    | Park  of id * area_t
+
+  datatype place_k = Sch | Corp | Home | Train | Super | Park
+(*
+  type place_k = int * place_k'
+  val [sch, corp, home, train, super, park]: place_k list = 
+    ListPair.zip (List.tabulate(6, fn i => i), 
+      [Sch, Corp, Home, Train, Super, Park])
+*)
+
+  type place_t = {place_k: place_k, area_t: area_t, id: id}
+
   type place = {id: place_t, nVis: size ref, size: size, beta: real}
   type mobil = 
     {id: place_t, nVis: size ref, size: size, beta: real
@@ -110,27 +114,21 @@ structure Type = struct
     }
   (* アクセサ *)
   fun projHome x = 
-    valOf (List.find (fn Home _ => true | _ => false) x)
-  fun areaPlace (Home (_,x)) = x
-    | areaPlace (Corp (_,x)) = x
-    | areaPlace (Sch  (_,x)) = x
-    | areaPlace (Park (_,x)) = x
-    | areaPlace (Super(_,x)) = x
-    | areaPlace (Train(_,x)) = x
-  fun areaPer ({belong, ...}:person) = areaPlace (projHome belong)
+    valOf (List.find (fn (p:place_t) => #place_k p = Home) x)
+  fun areaPer ({belong, ...}:person) = #area_t (projHome belong)
   fun localPer (p:person) = let
     val i = areaPer p
   in
-    List.filter (fn plc => i = areaPlace plc) (#belong p)
+    List.filter (fn plc => i = #area_t plc) (#belong p)
   end
-  fun placeCity (areas: area vector) (p: place_t) = 
-    case p
-      of Home (i,x) => (#home  o #3) (areas \ x) \ i
-       | Corp (i,x) => (#corp  o #3) (areas \ x) \ i
-       | Sch  (i,x) => (#sch   o #3) (areas \ x) \ i
-       | Park (i,x) => (#park  o #3) (areas \ x) \ i
-       | Super(i,x) => (#super o #3) (areas \ x) \ i
-       | Train(i,x) => raise undef () (* unreachable *)
+  fun placeAreas (areas: area vector) ({area_t,place_k,id}: place_t) =
+    case place_k 
+      of Home  => (#home  o #3) (areas \ area_t) \ id
+       | Corp  => (#corp  o #3) (areas \ area_t) \ id
+       | Sch   => (#sch   o #3) (areas \ area_t) \ id
+       | Park  => (#park  o #3) (areas \ area_t) \ id
+       | Super => (#super o #3) (areas \ area_t) \ id
+       | Train => raise undef () (* unreachable *)
 end
 
 structure Frame = struct
@@ -185,7 +183,7 @@ structure Frame = struct
         val (mem,pop') = cup1 pop
         val n = length mem
         val _ = print (fI n)
-        val hm = Home (idHome (), area_t)
+        val hm = {area_t = area_t, place_k = Home, id = idHome ()}
         val hmObj = {id = hm, nVis = ref n, size = n, beta = betaHome}
         val mem = map (fn m => ext2 (m,hm)) mem 
       in
@@ -204,18 +202,18 @@ structure Frame = struct
   (* 3. コミュニティ形成 *)
   fun genArea
     {area_t: area_t
-    ,nSch  : size , sch  : area_t -> id -> place
-    ,nCorp : size , corp : area_t -> id -> place
-    ,nSuper: size , super: area_t -> id -> place
-    ,nPark : size , park : area_t -> id -> place
+    ,nSch  : size , sch  : place_t -> place
+    ,nCorp : size , corp : place_t -> place
+    ,nSuper: size , super: place_t -> place
+    ,nPark : size , park : place_t -> place
     ,popHome: person list * place vector
     }: area =
     (area_t
     , #1 popHome
-    , {sch   = Vector.tabulate (nSch  , sch area_t)
-      ,corp  = Vector.tabulate (nCorp , corp area_t)
-      ,super = Vector.tabulate (nSuper, super area_t)
-      ,park  = Vector.tabulate (nPark , park area_t)
+    , {sch   = Vector.tabulate (nSch  , fn id => sch  {place_k = Home, area_t = area_t, id = id})
+      ,corp  = Vector.tabulate (nCorp , fn id => corp {place_k = Home, area_t = area_t, id = id})
+      ,super = Vector.tabulate (nSuper, fn id => super{place_k = Home, area_t = area_t, id = id})
+      ,park  = Vector.tabulate (nPark , fn id => park {place_k = Home, area_t = area_t, id = id})
       ,home  = #2 popHome
       }
     )
@@ -231,7 +229,7 @@ structure Frame = struct
     infix 9 \
   in
     Vector.map (fn {deptime, from, to} => 
-        {id    = Train (idx (), 0)
+        {id    = {place_k = Train, area_t = 0, id = idx ()}
         ,nVis  = ref 0
         ,size  = size
         ,beta  = beta
@@ -249,7 +247,7 @@ structure Frame = struct
     ) services
   end
 
-  fun conArea 
+  fun setAction 
     {area  : area vector
     ,belong: area vector -> person -> place_t list
     }: city =
@@ -275,8 +273,8 @@ structure Frame = struct
   val rnd = Random.rand(0,1)
 
   fun updatePerson (areas:area vector)(p:person){visit, dest, health} = let
-    val from' = placeCity areas (#visit p)
-    val to'   = placeCity areas visit
+    val from' = placeAreas areas (#visit p)
+    val to'   = placeAreas areas visit
   in
     ( #nVis from' := !(#nVis from') - 1
     ; #nVis to'   := !(#nVis to')   + 1
@@ -299,7 +297,7 @@ structure Frame = struct
         let
           val dest = rndSelL rnd (#belong p)
         in
-          if (areaPlace dest = myArea) then
+          if (#area_t dest = myArea) then
             updatePerson areas p {visit = dest, dest = NONE, health = #health p}
           else            
             updatePerson areas p {visit = #visit p, dest = SOME dest, health = #health p}
@@ -312,10 +310,9 @@ structure Frame = struct
 
   fun evalTrain ({time,...}:city) (tr:mobil) = let
     val (time',area_t') = #sked tr \ (#iSked tr)
-    val Train (id, _) = #id tr
   in
     if (time = time') then
-      {id    = Train (id,area_t')
+      {id    = {place_k = Train, id = #id (#id tr), area_t = area_t'}
       ,nVis  = #nVis tr
       ,size  = #size tr
       ,beta  = #beta tr
@@ -368,8 +365,8 @@ structure Trivial = struct
     else
       Hausfrau
 
-  fun place typ size beta a id  =
-    {id = typ (id, a)
+  fun place size beta place_t  =
+    {id = place_t 
     ,nVis = ref 0
     ,size = iR o abs $ rI size + rI size*rgauss rnd
     ,beta = abs (beta + beta*rgauss rnd)
@@ -392,10 +389,10 @@ structure Trivial = struct
   fun genArea area_t = 
     F.genArea 
       {area_t = area_t
-      ,nSch   = 3, sch   = place Sch  100 0.1
-      ,nCorp  = 5, corp  = place Corp  80 0.1
-      ,nSuper = 1, super = place Super 50 0.05
-      ,nPark  = 1, park  = place Park  50 0.01
+      ,nSch   = 3, sch   = place 100 0.1
+      ,nCorp  = 5, corp  = place  80 0.1
+      ,nSuper = 1, super = place  50 0.05
+      ,nPark  = 1, park  = place  50 0.01
       ,popHome = 
         F.genPop 
           {area_t = area_t
@@ -405,8 +402,8 @@ structure Trivial = struct
           ,fmRule = fmRule
           }
       }
-  fun conArea areas = F.conArea {area = areas, belong = belong}
+  fun setAction areas = F.setAction {area = areas, belong = belong}
 
   fun genCity () =
-    conArea (Vector.map genArea #[HAC, TAC, JOJ, SJK, TKY])
+    setAction (Vector.map genArea #[HAC, TAC, JOJ, SJK, TKY])
 end
