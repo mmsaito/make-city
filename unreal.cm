@@ -5,6 +5,7 @@ Library
     structure Type
     structure Frame
     structure Trivial
+    structure Probe
 is
     $/basis.cm
     $/smlnj-lib.cm

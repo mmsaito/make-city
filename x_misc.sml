@@ -3,8 +3,9 @@ structure X_Misc = struct
 local
   open Alice
   open EasyPrint; infix 1 <<
+  fun op <> (x,y) = x y; infix 1 <>;
+  val op $ = Vector.sub; infix 9 $;
 in
-  fun op $ (f,x) = f x; infix 1 $;
   (* 乱数 *)
   fun rgauss rnd = let
     val u1 = Random.randReal rnd
@@ -22,10 +23,29 @@ in
     val j = Int.mod (Random.randInt rnd, length l)
     val i = ref 0
   in
-    valOf o List.find (fn _ => !i = j before i := !i + 1) $ l
+    valOf o List.find (fn _ => !i = j before i := !i + 1) <> l
   end
 
   (* ポアソン分布 *)
+  fun rpoisson rnd lambda = let
+    val s = ref (exp lambda)
+    val n = ref 0
+  in
+    (while (!s > 1.0) do
+      (s := !s * Random.randReal rnd
+      ;n := !n + 1
+(*
+      ;if !n > 200 then 
+        (print (csvList "," (fG 16) [lambda,!s] ^ "\n")
+        ;TextIO.input1 (TextIO.stdIn);())
+       else ()
+*)
+      )
+    ;!n
+    )
+  end
+  fun rpoisson' rnd lambda = Real.fromInt (rpoisson rnd lambda)
+
   fun lnGamma z = 
     0.5*(ln (pi+pi) - ln z + z*(2.0*ln z + ln (z*sinh(1.0/z) + 1.0/810.0/pow (z,6.0)) - 2.0))
   fun lnPo m x = ~m + x * ln m - lnGamma (x + 1.0)
@@ -49,7 +69,14 @@ in
       of (rs,x::xs) => (SOME x, List.revAppend (rs,xs))
        | (rs,nil  ) => (NONE  , xs)
   end
+
+  (* リストから n番目の要素を取り出す *)
+  fun popAt(x::xs,0) = (x,xs)
+    | popAt(x::xs,n) = (fn (y,ys) => (y, x::ys)) (popAt(xs,n-1))
+
+  (* 非復元サンプル *)
+  fun uniqRndSample rnd seq n =
+    Iterator.applyN (fn (xs,ys) => (fn (z,zs) => (z::xs,zs)) 
+      (popAt(ys, Random.randInt rnd mod (length ys)))) n (nil,seq)
 end
 end
-
-
