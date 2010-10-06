@@ -391,10 +391,13 @@ structure Frame = struct
 
   (* SEIRモデルに基づく、場所毎の各健康状態にいる人口の推移の予測 *)
   fun estTransitP (p:place): place = let
-    val n = Real.fromInt (#size p)
+    (* val n = Real.fromInt (#size p)   (* これはバグってハニー!! *) *)
     val s = Real.fromInt (!(#s(#nVis p)))
     val e = Real.fromInt (!(#e(#nVis p)))
     val i = Real.fromInt (!(#i(#nVis p)))
+    val r = Real.fromInt (!(#r(#nVis p)))
+    val v = Real.fromInt (!(#v(#nVis p)))
+    val n = s + e + i + r + v
   in
     {id = #id p, nVis = #nVis p, size = #size p, betaN = #betaN p
     ,pTrns =
