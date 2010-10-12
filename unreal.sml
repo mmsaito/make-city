@@ -86,7 +86,7 @@ structure Type = struct
      と思ったが、継承もコンポジションも必要ないことがわかったので、
      単にフィールド追加にする。
    *)
-  type person = 
+  datatype person = PERSON of
     { age   : age
     , gender: gender
     , role  : role
@@ -94,11 +94,12 @@ structure Type = struct
     , visit : place_t
     , dest  : place_t option
     , health: health list
+    , sched: person * time -> (real * place_t) list
     }
   (* 中間構造体 *)
-    type per1 = {age: age, gender: gender}
-    type per2 = {age: age, gender: gender, role: role}
-    type per3 = {age: age, gender: gender, role: role, belong: place_t list}
+    (* type per1 = {age: age, gender: gender} *)
+    type per2 = {age: age, gender: gender, role: role, sched: person * time -> (real * place_t) list}
+    (* type per3 = {age: age, gender: gender, role: role, belong: place_t list} *)
 
   type places = 
     { sch  : place vector
@@ -124,9 +125,9 @@ structure Type = struct
   (* アクセサ *)
   fun projHome x = 
     valOf (List.find (fn (p:place_t) => #place_k p = Home) x)
-  fun areaPer ({belong, ...}:person) = #area_t (projHome belong)
-  fun localPer (p:person) = let
-    val i = areaPer p
+  fun areaPer (PERSON {belong, ...}:person) = #area_t (projHome belong)
+  fun localPer (PERSON p:person) = let
+    val i = areaPer (PERSON p)
   in
     List.filter (fn plc => i = #area_t plc) (#belong p)
   end
@@ -155,19 +156,19 @@ structure Frame = struct
   (* 2. 家族構成 *)
   fun makeHome (area_t: area_t)
                (persons:per2 list)
-               (rule: unit -> ({age:age, gender:gender, role: role} -> bool) list)
+               (rule: unit -> (per2 -> bool) list)
                :person list * place vector = 
   let
     fun grouping (ps:per2 list): per2 list list = let
       fun op <+> (x,(SOME u,v)) = (u::x,v)
         | op <+> (x,(NONE,  v)) = (x, v)
       infix 1 <+>
-      fun group1 ps = 
+      fun group1 (ps: per2 list) = 
         case foldl (fn (cond,(mem,pop)) => mem <+> findpop cond pop) (nil,ps) (rule())
           of (nil, y::ys) => ([y], ys) (* １人は取れることを保証 *)
            | (xs , ys)    => (xs , ys)
       fun loop pps nil = pps
-        | loop pps ps  =
+        | loop pps (ps:per2 list)  =
         (fn (qs,ps) => loop (qs::pps) ps) (group1 ps)
     in
       loop nil ps
@@ -181,14 +182,17 @@ structure Frame = struct
         ,size  = length ps
         ,betaN = betaNHome}
       val ps: person list = 
-        map (fn p =>
+        map (fn p => PERSON
           {age    = #age p
           ,gender = #gender p
           ,role   = #role p
           ,visit  = (#id hm)
           ,belong = (#id hm) :: nil
           ,dest   = NONE
-          ,health = SUS :: nil}) ps 
+          ,health = SUS :: nil
+          ,sched = #sched p
+          }
+        ) ps 
     in
       (ps,hm)
     end
@@ -222,14 +226,15 @@ structure Frame = struct
     ,belong: area vector -> person -> place_t list}
     :area vector = 
   let
-    fun ext (x:person) =
+    fun ext (PERSON x:person) = PERSON
       {age = #age x
       ,gender = #gender x
       ,role   = #role x
-      ,belong = belong area x @ #belong x
+      ,belong = belong area (PERSON x) @ #belong x
       ,visit  = #visit x
       ,dest   = #dest x
       ,health = #health x
+      ,sched = #sched x
       }
     fun asg (id, pop, places) =
       (id, map ext pop, places)
@@ -294,7 +299,7 @@ structure Frame = struct
       foldl (fn ((n,stat),(modified, per)) => 
         let val (target,per) = uniqRndSample rnd per n in  
           (map 
-            (fn (p:person) =>
+            (fn (PERSON p:person) => PERSON
               { age    = #age p
               , gender = #gender p
               , role   = #role p
@@ -305,6 +310,7 @@ structure Frame = struct
                   if (hd (#health p) = stat) 
                     then #health p
                     else stat :: tl (#health p)
+              , sched = #sched p
               }:person
           ) target :: modified
           ,per)
@@ -327,7 +333,7 @@ structure Frame = struct
     ) train
 
   (* いま居る場所の感染効率から確率過程により健康状態を遷移させる *)
-  fun doTransit ({area=areas,train,time}:city) (p: person): health list = let
+  fun doTransit ({area=areas,train,time}:city) (PERSON p: person): health list = let
     val pTrns =
       case #visit p 
         of {place_k = Train, id, area_t} => #pTrns (train $ id)
@@ -342,34 +348,35 @@ structure Frame = struct
   end
 
   (* 人間の振る舞いのこのプログラムが「お仕着せる」部分。核である *)
-  fun evalPerson (city:city) (p: person) = let
+  fun evalPerson (city:city) (PERSON p: person) = let
     val {area=areas,train,time} = city
-    fun movetrns (p:person) {visit, dest} =
+    fun movetrns {visit, dest} = PERSON
       { age    = #age p, gender = #gender p, role = #role p, belong = #belong p
+      , sched = #sched p
       , visit  = visit
       , dest   = dest     
-      , health = doTransit city p
+      , health = doTransit city (PERSON p)
       }
-    fun trns p = movetrns p {visit = #visit p, dest = #dest p}
-    val myArea = areaPer p
+    fun trns() = movetrns {visit = #visit p, dest = #dest p}
+    val myArea = areaPer (PERSON p)
   in
     case #dest p
       of NONE => let
           (* ランダムに行き先を選び、町内であればそこへ、でなければ「駅」に向かう *)
           val dest = rndSelL rnd (#belong p) in
           if (#area_t dest = myArea)
-            then movetrns p {visit = dest, dest = NONE}
-            else movetrns p {visit = #visit p, dest = SOME dest} end
+            then movetrns {visit = dest, dest = NONE}
+            else movetrns {visit = #visit p, dest = SOME dest} end
        | SOME dest =>
           (* 乗れる電車があれば乗る。そして、目的地でおりる *)
           if (#place_k (#visit p) = Train) then 
             if (#area_t (#id (train $ #id (#visit p))) = #area_t dest) then
-              movetrns p {visit = dest, dest = NONE}
+              movetrns {visit = dest, dest = NONE}
             else
-              trns p
+              trns () 
           else (case catchTrain (train, time, myArea, #area_t dest)
-            of SOME tr => movetrns p {visit = #id tr, dest = SOME dest}
-             | NONE    => trns p
+            of SOME tr => movetrns {visit = #id tr, dest = SOME dest}
+             | NONE    => trns ()
           )
   end
 
@@ -444,7 +451,7 @@ structure Frame = struct
     val {area=areas,train,time} = city
     val vapp = Vector.app
 
-    fun addVis (p:person) = let
+    fun addVis (PERSON p:person) = let
       val nVis =
         case #visit p 
           of {place_k = Train, id, area_t} => #nVis (train $ id)
@@ -484,7 +491,7 @@ structure Probe = struct
   structure T = TextIO
   infix 9 $
   infix 1 <>
-  fun isStat (h:health)(p:person) = 
+  fun isStat (h:health)(PERSON p:person) = 
     case (h,hd (#health p)) 
       of (SUS  ,SUS  ) => true
        | (EXP _,EXP _) => true
@@ -544,7 +551,7 @@ structure Trivial = struct
       else
         Hausfrau
   in
-    {age = age, gender = gender, role = role}
+    {age = age, gender = gender, role = role, sched = raise Undef}
   end
 
   (* 家族構成ルール *)
@@ -564,8 +571,8 @@ structure Trivial = struct
     rulePlace' size 0.1 {place_k = place_k, area_t = area_t, id = id}
 
   (* 行動範囲ルール *) 
-  fun ruleVisit (areas: area vector)(p: person): place_t list = let
-    val i0 = areaPer p
+  fun ruleVisit (areas: area vector)(PERSON p: person): place_t list = let
+    val i0 = areaPer (PERSON p)
     val (_,_,a0) = areas $ i0
     val (_,_,a') = rndselV areas
   in
