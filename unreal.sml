@@ -348,11 +348,14 @@ structure Frame = struct
   end
 
   (* 人間の振る舞いのこのプログラムが「お仕着せる」部分。核である *)
+
+  (* その前に、[(pr,x) ...] から確率prでxを取るルーチンを書け *)
+
   fun evalPerson (city:city) (PERSON p: person) = let
     val {area=areas,train,time} = city
     fun movetrns {visit, dest} = PERSON
       { age    = #age p, gender = #gender p, role = #role p, belong = #belong p
-      , sched = #sched p
+      , sched  = #sched p
       , visit  = visit
       , dest   = dest     
       , health = doTransit city (PERSON p)
@@ -361,9 +364,12 @@ structure Frame = struct
     val myArea = areaPer (PERSON p)
   in
     case #dest p
-      of NONE => let
+      of NONE => 
+        let
           (* ランダムに行き先を選び、町内であればそこへ、でなければ「駅」に向かう *)
-          val dest = rndSelL rnd (#belong p) in
+          (* val dest = rndSelL rnd (#belong p) *)
+          val dest = rndSelLP rnd (#sched p (p, time))
+        in
           if (#area_t dest = myArea)
             then movetrns {visit = dest, dest = NONE}
             else movetrns {visit = #visit p, dest = SOME dest} end
@@ -538,20 +544,160 @@ structure Trivial = struct
   (* ====================================================================  *)
   (* 生成ルール *)
 
+  (* 行動テンプレート *)
+  (* 次のような振る舞い
+   * 会社員: 月～金は会社へ、土日は会社以外に適当に
+   * 主婦  : 一日n回はスーパーに行く。
+   *   p[1/step] * Δt^{-1}[steps/day] = n[/day] =>  p = nΔt
+   *
+   * シミュレーションの1ステップΔtと時間間隔のステップ数表示
+   *   - Δtは[day]の単位で書かれているとする 
+   *     <=> Δt[days/step]            <=> Δt^{-1}[steps/day]
+   *     <=> Δt^{-1}/24[steps/hour]   <=> 24Δt [hour/steps]
+   *     <=> Δt^{-1}/24/60[steps/min] <=> 24*60*Δt [min/steps]
+   *        per n unit = 1.0*unit / n
+   *        unit = {day = 1, hour = 24, min = 24*60}
+   * 回帰処理: 「毎日帰宅する」
+   *   ... これをリアリスティックに書くのはむつかしい。第0近似として、
+   *     - 午後8時 - 午後10時: 確率 p でHomeを目的値にセットする。
+   *       ただし、p = 24Δt/2 = 12Δt
+   *     - 午後11時 -        : 確率1でHomeを目的値にセットする。
+   *   
+   *)
+  (* 会社員のスケジュール *)
+  fun schedEmp (PERSON p, t:time): (real * place_t) list = let
+    val Employed = #role p
+
+    (* 時刻 *)
+    val steps_per_day = Real.round (1.0/dt)
+    val steps   = t mod steps_per_day 
+    val day     = t div steps_per_day
+    val weekday = day mod 7  (* Sun:0 & Sat:6 *)
+    val hour    = 24.0*dt*Real.fromInt t
+    (* 確率を 3 times per 2 hours のごとく書くための定義 *)
+    fun per n uni = 1.0/n/uni
+    infix 7 times
+    fun op times(x,y) = x * y
+    val days    = 1.0/dt
+    val hours   = 1.0/24.0/dt
+    val minutes = 1.0/24.0/60.0/dt
+
+    fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
+    fun corp() = valOf (List.find (fn {place_k = Corp, ...} => true | _ => false) (#belong p))
+  in
+    if (1 <= weekday andalso weekday <= 5) then
+      if (6.0 <= hour andalso hour <= 10.0) then
+        let val pr = 1.0 times per 4.0 hours
+        in [(pr, corp()), (1.0 - pr, #visit p)] end
+      else if (hour < 18.0) then
+        [(1.0, #visit p)]
+      else if (18.0 <= hour andalso hour <= 22.0) then
+        let val pr = 1.0 times per 4.0 hours 
+        in [(pr, home()), (1.0 - pr, #visit p)] end
+      else
+        [(1.0, home())]
+    else
+      if (hour < 18.0) then
+        let 
+          val n  = Real.fromInt (length (#belong p))
+          val pr = (1.0 times per 1.0 days) / n
+        in 
+          (1.0 - n*pr, #visit p) :: map (fn place => (pr, place)) (#belong p)
+        end
+      else 
+        [(1.0, home())]
+  end
+   
+  (* 学生のスケジュール *)
+  fun schedStu (PERSON p, t:time): (real * place_t) list = let
+    val Student = #role p
+    (* 時刻 *)
+    val steps_per_day = Real.round (1.0/dt)
+    val steps   = t mod steps_per_day 
+    val day     = t div steps_per_day
+    val weekday = day mod 7  (* Sun:0 & Sat:6 *)
+    val hour    = 24.0*dt*Real.fromInt t
+    (* 確率を 3 times per 2 hours のごとく書くための定義 *)
+    fun per n uni = 1.0/n/uni
+    infix 7 times
+    fun op times(x,y) = x * y
+    val days    = 1.0/F.dt
+    val hours   = 1.0/24.0/F.dt
+    val minutes = 1.0/24.0/60.0/F.dt
+
+    fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
+    fun sch()  = valOf (List.find (fn {place_k = Sch, ...} => true | _ => false) (#belong p))
+  in
+    if (1 <= weekday andalso weekday <= 5) then
+      if (6.0 <= hour andalso hour <= 8.0) then
+        let val pr = 1.0 times per 2.0 hours
+        in [(pr, sch()), (1.0 - pr, #visit p)] end
+      else if (hour < 15.0) then
+        [(1.0, #visit p)]
+      else if (16.0 <= hour andalso hour <= 19.0) then
+        let val pr = 1.0 times per 3.0 hours 
+        in [(pr, home()), (1.0 - pr, #visit p)] end
+      else
+        [(1.0, home())]
+    else
+      if (hour < 18.0) then
+        let 
+          val n  = Real.fromInt (length (#belong p))
+          val pr = (1.0 times per 1.0 days) / n
+        in 
+          (1.0 - n*pr, #visit p) :: map (fn place => (pr, place)) (#belong p)
+        end
+      else 
+        [(1.0, home())]
+  end
+
+  (* 主婦のスケジュール *)
+  fun schedHaus (PERSON p, t:time): (real * place_t) list = let
+    val Hausfrau = #role p
+    (* 時刻 *)
+    val steps_per_day = Real.round (1.0/dt)
+    val steps   = t mod steps_per_day 
+    val day     = t div steps_per_day
+    val weekday = day mod 7  (* Sun:0 & Sat:6 *)
+    val hour    = 24.0*dt*Real.fromInt t
+    (* 確率を 3 times per 2 hours のごとく書くための定義 *)
+    fun per n uni = 1.0/n/uni
+    infix 7 times
+    fun op times(x,y) = x * y
+    val days    = 1.0/F.dt
+    val hours   = 1.0/24.0/F.dt
+    val minutes = 1.0/24.0/60.0/F.dt
+
+    fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
+  in
+    if (6.0 <= hour andalso hour <= 8.0) then
+      [(1.0, home())]
+    else if (hour < 18.0) then
+      (* 行ける場所に平均1回ずつ行く *)
+      let
+        val n  = Real.fromInt (length (#belong p))
+        val pr = 1.0 times per 10.0 hours 
+      in 
+       (1.0 - n*pr, #visit p) :: map (fn place => (pr, place)) (#belong p)
+      end
+    else
+      [(1.0, home())]
+  end
+
   (* 人間生成ルール *)
   fun rulePerson id = let
     val age    = Real.abs (30.0 + 30.0*rgauss rnd)
     val gender = rndsel rnd 0.5 (F,M)
-    val role   = 
-      if (age <= 22.0)     then Student
+    val (role,sched)   = 
+      if (age <= 22.0)     then (Student, schedStu)
       else if (age < 60.0) then
         case gender
-          of F => rndsel rnd 0.6 (Employed, Hausfrau)
-           | M => rndsel rnd 0.8 (Employed, Hausfrau)
+          of F => rndsel rnd 0.6 ((Employed,schedEmp), (Hausfrau,schedHaus))
+           | M => rndsel rnd 0.8 ((Employed,schedEmp), (Hausfrau,schedHaus))
       else
-        Hausfrau
+        (Hausfrau,schedHaus)
   in
-    {age = age, gender = gender, role = role, sched = raise Undef}
+    {age = age, gender = gender, role = role, sched = sched}
   end
 
   (* 家族構成ルール *)

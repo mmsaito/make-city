@@ -1,30 +1,22 @@
-structure X_Misc = struct
-  (* ガウス乱数 *)
-local
-  open Alice
-  open EasyPrint; infix 1 <<
-  fun op <> (x,y) = x y; infix 1 <>;
-  val op $ = Vector.sub; infix 9 $;
-in
-  (* 乱数 *)
-  fun rgauss rnd = let
-    val u1 = Random.randReal rnd
-    val u2 = Random.randReal rnd
+fun rndSelLP rnd (x::xs: (real * 'a) list) = let
+    val u = Random.randReal rnd
+    fun loop (_ ,y,nil) = #2 y
+      | loop (cw,y,x::xs) = 
+      if (cw > u) then #2 y else loop (cw + #1 x, x, xs)
+    and trick() = loop (#1 x, x, xs)
   in
-    sqrt(~2.0*ln u1)*cos(2.0*pi*u2)
+    trick()
   end
-  fun rndsel rnd p (x,y) = 
-    if (Random.randReal rnd < p) 
-      then x
-      else y
-  fun rndselV rnd v =
-    Vector.sub(v, Int.mod (Random.randInt rnd, Vector.length v))
-  fun rndSelL rnd l = let
-    val j = Int.mod (Random.randInt rnd, length l)
-    val i = ref 0
-  in
-    valOf o List.find (fn _ => !i = j before i := !i + 1) <> l
-  end
+  (* テストコード
+    datatype tag = C1 | C2 | C3 | C4
+    val prL = [(0.1,C1),(0.4,C4),(0.2,C2),(0.3,C3)]
+    val xs = List.tabulate(100000, fn _ => X_Misc.rndSelLP rnd prL)
+
+    val c1 = List.filter (fn c => c = C1) xs
+    val c2 = List.filter (fn c => c = C2) xs
+    val c3 = List.filter (fn c => c = C3) xs
+    val c4 = List.filter (fn c => c = C4) xs
+  *)
 
   (* ポアソン分布 *)
   fun rpoisson rnd lambda = let
