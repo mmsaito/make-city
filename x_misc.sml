@@ -1,4 +1,32 @@
-fun rndSelLP rnd (x::xs: (real * 'a) list) = let
+structure X_Misc = struct
+  (* ƒKƒEƒX—” *)
+local
+  open Alice
+  open EasyPrint; infix 1 <<
+  fun op <> (x,y) = x y; infix 1 <>;
+  val op $ = Vector.sub; infix 9 $;
+in
+  (* —” *)
+  fun rgauss rnd = let
+    val u1 = Random.randReal rnd
+    val u2 = Random.randReal rnd
+  in
+    sqrt(~2.0*ln u1)*cos(2.0*pi*u2)
+  end
+  fun rndsel rnd p (x,y) = 
+    if (Random.randReal rnd < p) 
+      then x
+      else y
+  fun rndselV rnd v =
+    Vector.sub(v, Int.mod (Random.randInt rnd, Vector.length v))
+  fun rndSelL rnd l = let
+    val j = Int.mod (Random.randInt rnd, length l)
+    val i = ref 0
+  in
+    valOf o List.find (fn _ => !i = j before i := !i + 1) <> l
+  end
+
+  fun rndSelLP rnd (x::xs: (real * 'a) list) = let
     val u = Random.randReal rnd
     fun loop (_ ,y,nil) = #2 y
       | loop (cw,y,x::xs) = 

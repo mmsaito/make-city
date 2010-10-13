@@ -368,7 +368,7 @@ structure Frame = struct
         let
           (* ランダムに行き先を選び、町内であればそこへ、でなければ「駅」に向かう *)
           (* val dest = rndSelL rnd (#belong p) *)
-          val dest = rndSelLP rnd (#sched p (p, time))
+          val dest = rndSelLP rnd (#sched p (PERSON p, time))
         in
           if (#area_t dest = myArea)
             then movetrns {visit = dest, dest = NONE}
