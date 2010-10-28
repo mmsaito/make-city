@@ -35,14 +35,36 @@ structure Type = struct
   
   (* ============================================================== *)
   (* 差しあたって定数とするもの *)
-  val betaNHome = 1.0
   val alpha = 1.0/3.5
   val gamma = 1.0/3.0
+
+  (* 時計関係 *)
+  type time = int (* in steps *)
   val dt = 1.0/1440.0 (* [day] = 1 [min] *)
+  val steps_per_day = Real.round (1.0/dt)
+
+  (* 時間の単位 (in steps) *)
+  val days    = 1.0/dt
+  val hours   = 1.0/24.0/dt
+  val minutes = 1.0/24.0/60.0/dt
+
+  fun timecomp (t:time) = let
+    val step    = t mod steps_per_day
+    val day     = t div steps_per_day
+  in{ day     = day
+    , weekday = day mod 7  (* Sun:0 & Sat:6 *)
+    , hour    = 24.0*dt*Real.fromInt step
+    , step    = step
+    }
+  end
+ 
+  fun per n uni = 1.0/n/uni
+  infix 7 times
+  fun op times(x,y) = x * y: real
+
   (* ============================================================== *)
   (* 人間 *)
   type age  = real
-  type time = int
   datatype gender  = F | M
   datatype role    = Employed | Hausfrau | Student
   datatype health
@@ -96,6 +118,7 @@ structure Type = struct
     , health: health list
     , sched: person * time -> (real * place_t) list
     }
+  fun deP (PERSON p) = p
   (* 中間構造体 *)
     (* type per1 = {age: age, gender: gender} *)
     type per2 = {age: age, gender: gender, role: role, sched: person * time -> (real * place_t) list}
@@ -155,6 +178,7 @@ structure Frame = struct
 
   (* 2. 家族構成 *)
   fun makeHome (area_t: area_t)
+               (betaN : real)
                (persons:per2 list)
                (rule: unit -> (per2 -> bool) list)
                :person list * place vector = 
@@ -180,7 +204,8 @@ structure Frame = struct
         ,nVis  = zeroNVis()
         ,pTrns = zeroPTrns()
         ,size  = length ps
-        ,betaN = betaNHome}
+        ,betaN = betaN
+        }
       val ps: person list = 
         map (fn p => PERSON
           {age    = #age p
@@ -326,11 +351,24 @@ structure Frame = struct
   (* シミュレーションエンジン *)
   val rnd = Random.rand(0,1)
 
-  fun catchTrain (train:mobil vector, now:time, src:area_t, dst:area_t): mobil option =
+  val succTr = ref 0
+  val failTr = ref 0
+
+  fun catchTrain' (train:mobil vector, now:time, src:area_t, dst:area_t): mobil option = let
+    (* steps数単位での(日内)時刻,
+     * 平日/土日で異なるダイアを使うときはここを変える必要がある *)
+    val {step,...} = timecomp now 
+  in
     Vector.find (fn tr => 
-      Vector.exists (fn {time,area_t} => time =  now andalso area_t = src) (#sked tr) andalso 
-      Vector.exists (fn {time,area_t} => time >= now andalso area_t = dst) (#sked tr)
+      Vector.exists (fn {time,area_t} => time =  step andalso area_t = src) (#sked tr) andalso 
+      Vector.exists (fn {time,area_t} => time >= step andalso area_t = dst) (#sked tr)
     ) train
+  end
+
+  fun catchTrain z = 
+    case catchTrain' z
+      of SOME x => SOME x before succTr := !succTr + 1
+       | NONE   => NONE   before failTr := !failTr + 1
 
   (* いま居る場所の感染効率から確率過程により健康状態を遷移させる *)
   fun doTransit ({area=areas,train,time}:city) (PERSON p: person): health list = let
@@ -340,10 +378,13 @@ structure Frame = struct
          | place_t                       => #pTrns (placeAreas areas place_t)
     val cur::hist = #health p
   in
+    (* 注: 履歴のとり方に注意。リスト連結は、効率が悪いが、簡潔に書くにはこう。
+     * rndsel rnd (#s2e pTrns) (EXP time, cur) :: cur :: hist ではない!!
+     * という間違ったことをすると、10倍遅くなる。*)
     case cur
-      of SUS   => rndsel rnd (#s2e pTrns) (EXP time, cur) :: hist
-       | EXP _ => rndsel rnd (#e2i pTrns) (INF time, cur) :: hist
-       | INF _ => rndsel rnd (#i2r pTrns) (REC time, cur) :: hist
+      of SUS   => rndsel rnd (#s2e pTrns) ([EXP time, cur],[cur]) @ hist
+       | EXP _ => rndsel rnd (#e2i pTrns) ([INF time, cur],[cur]) @ hist
+       | INF _ => rndsel rnd (#i2r pTrns) ([REC time, cur],[cur]) @ hist
        | _     => cur :: hist
   end
 
@@ -361,7 +402,7 @@ structure Frame = struct
       , health = doTransit city (PERSON p)
       }
     fun trns() = movetrns {visit = #visit p, dest = #dest p}
-    val myArea = areaPer (PERSON p)
+    val myArea = #area_t (#visit p)
   in
     case #dest p
       of NONE => 
@@ -386,10 +427,12 @@ structure Frame = struct
           )
   end
 
-  fun evalTrain ({time,...}:city) (tr:mobil) = let
+  fun evalTrain (city:city) (tr:mobil) = let
     val {time = time', area_t = area_t'} = #sked tr $ (#iSked tr)
+    val steps_per_day = Real.round (1.0/dt)
+    val steps   = (#time city) mod steps_per_day 
   in
-    if (time = time') then
+    if (steps = time') then
       {id    = {place_k = Train, id = #id (#id tr), area_t = area_t'}
       ,nVis  = #nVis tr
       ,pTrns = #pTrns tr
@@ -411,27 +454,31 @@ structure Frame = struct
     val r = Real.fromInt (!(#r(#nVis p)))
     val v = Real.fromInt (!(#v(#nVis p)))
     val n = s + e + i + r + v
+    val beta = if (n > 0.0) then #betaN p / n else 0.0
   in
     {id = #id p, nVis = #nVis p, size = #size p, betaN = #betaN p
     ,pTrns =
-      {s2e = #betaN p / n * s * i * dt 
-      ,e2i = alpha * e * dt
-      ,i2r = gamma * i * dt
+      {s2e = beta * i * dt  (* 意味がわかりやすい式は、 betaN * (i/n) * dt *)
+      ,e2i = alpha * dt (* 発症は自発的だから *e はおかしい *)
+      ,i2r = gamma * dt
       }
     }
   end
   fun estTransitM (p:mobil): mobil = let
-    val n = Real.fromInt (#size p)
     val s = Real.fromInt (!(#s(#nVis p)))
     val e = Real.fromInt (!(#e(#nVis p)))
     val i = Real.fromInt (!(#i(#nVis p)))
+    val r = Real.fromInt (!(#r(#nVis p)))
+    val v = Real.fromInt (!(#v(#nVis p)))
+    val n = s + e + i + r + v
+    val beta = if (n > 0.0) then  #betaN p / n else 0.0
   in
     {id = #id p, nVis = #nVis p, size = #size p, betaN = #betaN p
     ,iSked = #iSked p, sked = #sked p
     ,pTrns =
-      {s2e = #betaN p / n * s * i * dt 
-      ,e2i = alpha * e * dt
-      ,i2r = gamma * i * dt
+      {s2e = beta * i * dt 
+      ,e2i = alpha * dt
+      ,i2r = gamma * dt
       }
     }
   end
@@ -489,6 +536,13 @@ structure Frame = struct
       ,train = Vector.map (evalTrain city) (#train city)
       ,time  = #time city + 1
       }
+  fun mtime f = let
+    val t0 = Time.now()
+  in
+    f () before 
+      (print (Time.toString (Time.- (Time.now(), t0)))
+      ;print "\n")
+  end
 end
 
 structure Probe = struct
@@ -524,21 +578,50 @@ structure Probe = struct
     ;Vector.app (fn {s,e,i,r} => app (fn x => T.output(os, fI x ^ ",")) [s,e,i,r]) pop
     ;T.output(os,"\n"))
 
+  fun getPerson (city:city) (area_t:area_t) (idx:id) = 
+    List.nth(#2 (#area city $ area_t), idx)
+(*
+  fun showPlace_k Sch   = "Sch"
+    | showPlace_k Corp  = "Corp"
+    | showPlace_k Home  = "Home"
+    | showPlace_k Super = "Super"
+    | showPlace_k Park  = "Park"
+    | showPlace_k Train = "Train"
+ *)
+  fun showPlace_k Sch   = "1"
+    | showPlace_k Corp  = "2"
+    | showPlace_k Home  = "3"
+    | showPlace_k Super = "4"
+    | showPlace_k Park  = "5"
+    | showPlace_k Train = "6"
+
+  fun showPlace_t ({area_t,id,place_k}:place_t) = 
+    fI area_t ^ "," ^ fI id ^ "," ^ showPlace_k place_k ^ ","
 end
 
 structure Trivial = struct
 (* ================================================================ *)
 (* 具体的な構成を決める手続き *)
-  open Type 
+  open Type
+  infix 7 times
   val op <> = fn (x,y) => x y; infix 1 <>;
   val op $ = Vector.sub; infix 9 $;
   structure F = Frame;
   structure T = TextIO
+  structure It = Iterator
   open X_Misc;
   open Alice;
+  open EasyPrint;
   val rnd = Random.rand (0,1);
   fun rndselV (v: 'a vector) = 
     v $ (Int.mod (Random.randInt rnd, Vector.length v))
+
+  (* 感染に関わる定数 *)
+  val betaNHome  = 1.4 * gamma
+  val betaNSch   = 1.8 * gamma
+  val betaNSuper = 1.4 * gamma
+  val betaNCorp  = 1.8 * gamma
+  val e0_JOJ     = 30
 
   (* 人口分布に似た簡単な分布がある:   クラーク分布 *)
   (* ====================================================================  *)
@@ -562,37 +645,28 @@ structure Trivial = struct
    *     - 午後8時 - 午後10時: 確率 p でHomeを目的値にセットする。
    *       ただし、p = 24Δt/2 = 12Δt
    *     - 午後11時 -        : 確率1でHomeを目的値にセットする。
-   *   
+   *
+   * e-folding time を T とすると、tだけ経過したときの残留率は、
+       t = T: 36%, t = 2T: 13%, t = 3T: 5%, {t = 4T: 2%}, t = 5T: 0.7%
+   * 出勤時刻をNステップいないで一様にするには、
+       pk = 1/(N - k).  (k=0,...,N-1)
    *)
   (* 会社員のスケジュール *)
   fun schedEmp (PERSON p, t:time): (real * place_t) list = let
     val Employed = #role p
-
-    (* 時刻 *)
-    val steps_per_day = Real.round (1.0/dt)
-    val steps   = t mod steps_per_day 
-    val day     = t div steps_per_day
-    val weekday = day mod 7  (* Sun:0 & Sat:6 *)
-    val hour    = 24.0*dt*Real.fromInt t
-    (* 確率を 3 times per 2 hours のごとく書くための定義 *)
-    fun per n uni = 1.0/n/uni
-    infix 7 times
-    fun op times(x,y) = x * y
-    val days    = 1.0/dt
-    val hours   = 1.0/24.0/dt
-    val minutes = 1.0/24.0/60.0/dt
-
+    val {day,weekday,hour,step} = timecomp t
     fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
     fun corp() = valOf (List.find (fn {place_k = Corp, ...} => true | _ => false) (#belong p))
   in
     if (1 <= weekday andalso weekday <= 5) then
-      if (6.0 <= hour andalso hour <= 10.0) then
-        let val pr = 1.0 times per 4.0 hours
+      if (6.0 <= hour andalso hour < 10.0) then
+        let (* val pr = 1.0 times per 4.0 hours *)
+            val pr = 1.0/(4.0*hours - (rI step - 6.0*hours))
         in [(pr, corp()), (1.0 - pr, #visit p)] end
       else if (hour < 18.0) then
         [(1.0, #visit p)]
       else if (18.0 <= hour andalso hour <= 22.0) then
-        let val pr = 1.0 times per 4.0 hours 
+        let val pr = 1.0/(4.0*hours - (rI step - 18.0*hours))
         in [(pr, home()), (1.0 - pr, #visit p)] end
       else
         [(1.0, home())]
@@ -611,31 +685,18 @@ structure Trivial = struct
   (* 学生のスケジュール *)
   fun schedStu (PERSON p, t:time): (real * place_t) list = let
     val Student = #role p
-    (* 時刻 *)
-    val steps_per_day = Real.round (1.0/dt)
-    val steps   = t mod steps_per_day 
-    val day     = t div steps_per_day
-    val weekday = day mod 7  (* Sun:0 & Sat:6 *)
-    val hour    = 24.0*dt*Real.fromInt t
-    (* 確率を 3 times per 2 hours のごとく書くための定義 *)
-    fun per n uni = 1.0/n/uni
-    infix 7 times
-    fun op times(x,y) = x * y
-    val days    = 1.0/F.dt
-    val hours   = 1.0/24.0/F.dt
-    val minutes = 1.0/24.0/60.0/F.dt
-
+    val {day,weekday,hour,step} = timecomp t
     fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
     fun sch()  = valOf (List.find (fn {place_k = Sch, ...} => true | _ => false) (#belong p))
   in
     if (1 <= weekday andalso weekday <= 5) then
       if (6.0 <= hour andalso hour <= 8.0) then
-        let val pr = 1.0 times per 2.0 hours
+        let val pr = 1.0/(2.0*hours - (rI step - 6.0*hours))
         in [(pr, sch()), (1.0 - pr, #visit p)] end
       else if (hour < 15.0) then
         [(1.0, #visit p)]
       else if (16.0 <= hour andalso hour <= 19.0) then
-        let val pr = 1.0 times per 3.0 hours 
+        let val pr = 1.0/(3.0*hours - (rI step - 16.0*hours))
         in [(pr, home()), (1.0 - pr, #visit p)] end
       else
         [(1.0, home())]
@@ -654,20 +715,7 @@ structure Trivial = struct
   (* 主婦のスケジュール *)
   fun schedHaus (PERSON p, t:time): (real * place_t) list = let
     val Hausfrau = #role p
-    (* 時刻 *)
-    val steps_per_day = Real.round (1.0/dt)
-    val steps   = t mod steps_per_day 
-    val day     = t div steps_per_day
-    val weekday = day mod 7  (* Sun:0 & Sat:6 *)
-    val hour    = 24.0*dt*Real.fromInt t
-    (* 確率を 3 times per 2 hours のごとく書くための定義 *)
-    fun per n uni = 1.0/n/uni
-    infix 7 times
-    fun op times(x,y) = x * y
-    val days    = 1.0/F.dt
-    val hours   = 1.0/24.0/F.dt
-    val minutes = 1.0/24.0/60.0/F.dt
-
+    val {day,weekday,hour,step} = timecomp t
     fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
   in
     if (6.0 <= hour andalso hour <= 8.0) then
@@ -713,8 +761,8 @@ structure Trivial = struct
     ,betaN = abs (betaN + betaN*rgauss rnd)
     }: place
 
-  fun rulePlace place_k size area_t id = 
-    rulePlace' size 0.1 {place_k = place_k, area_t = area_t, id = id}
+  fun rulePlace place_k size betaN area_t id = 
+    rulePlace' size betaN {place_k = place_k, area_t = area_t, id = id}
 
   (* 行動範囲ルール *) 
   fun ruleVisit (areas: area vector)(PERSON p: person): place_t list = let
@@ -733,21 +781,25 @@ structure Trivial = struct
   val services =
     (Vector.fromList o List.concat) 
     (map (fn h => 
-       [ {deptime = 60*h, stations = #[TKY, SJK, JOJ, TAC, HAC]} 
-       , {deptime = 60*h, stations = #[HAC, TAC, JOJ, SJK, TKY]} 
-       ]
+      List.concat (map (fn m =>
+       [ {deptime = 60*h + m, stations = #[TKY, SJK, JOJ, TAC, HAC]} 
+       , {deptime = 60*h + m, stations = #[HAC, TAC, JOJ, SJK, TKY]} 
+       ]) [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
      ) [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23])
 
   (* ====================================================================  *)
   (* 上記ルールによる都市の組み立て *)
   fun per ()     = F.makePerson 3000 rulePerson
-  fun perHome at = F.makeHome at (per ()) ruleHome
+  fun perHome at = F.makeHome at betaNHome (per ()) ruleHome
   fun place   at home = 
     F.makePlace at home
-      [(10,rulePlace Sch 100),(10,rulePlace Super 20),(19,rulePlace Corp 15)]
+      [(10,rulePlace Sch  100  betaNSch)
+      ,(10,rulePlace Super 20  betaNSuper)
+      ,(19,rulePlace Corp  15  betaNCorp)
+      ]
   fun infect (area:area) = 
     if (#1 area = JOJ) 
-      then F.distInfect rnd area [(15,EXP 0)]
+      then F.distInfect rnd area [(e0_JOJ,EXP 0)]
       else area
   val area = 
     Vector.map (fn at => 
@@ -763,18 +815,64 @@ structure Trivial = struct
     ,train = train
     ,time = 0
     }
+  (* 3000人 、1日で、45[sec] 
+     150万人、1日で、6.25[時間]    (実スケール)
+     15万人 、1日で、37.5[分]      (1/10スケール)
+     15万人 、1週間で、4.375[時間] (1/10スケール)
+     15万人 、6か月で、4.6875[日]  (1/10スケール)
+   * *)
+  (* 設定の書き出し、とても てんたてぃぶ *)
+  fun writeConf f = let
+    val os = T.openOut f
+  in
+    (T.output(os, "alpha," ^ fG 14 Type.alpha ^ "\n")
+    ;T.output(os, "gamma," ^ fG 14 Type.gamma ^ "\n")
+    ;T.output(os, "betaNHome," ^ fG 14 betaNHome ^ "\n")
+    ;T.output(os, "betaNSch," ^ fG 14 betaNSch ^ "\n")
+    ;T.output(os, "betaNCorp," ^ fG 14 betaNCorp ^ "\n")
+    ;T.output(os, "betaNSuper," ^ fG 14 betaNSuper ^ "\n")
+    ;T.output(os, "e0_JOJ," ^ fI e0_JOJ ^ "\n")
+    ;T.closeOut os
+    )
+  end
 
   fun run1 recstep tStop file city = let
-    val os = T.openOut file
+    val () = writeConf ("conf_" ^ file ^ ".csv")
+    val os = T.openOut ("pop_" ^ file ^ ".csv")
     val () = Probe.showPopTag os 5
-    val recstep = recstep * iR (1.0/dt)
-    val tStop   = tStop   * iR (1.0/dt)
     val nstep   = tStop div recstep
     fun step city = let
       val city = Iterator.applyN F.advanceTime recstep city
       val pop  = Probe.reducePop' city
     in
       city before Probe.showPop os (#time city) pop
+    end
+  in
+    Iterator.applyN step nstep city 
+      before T.closeOut os
+  end
+
+  
+  fun run2 recstep tStop file (*city*) = let
+    val npick = 20
+    val () = writeConf ("conf_" ^ file ^ ".csv")
+    val os = T.openOut ("trip_" ^ file ^ ".csv")
+    (* tag *)
+    val _ = T.output(os,"t,")
+    val _ = It.applyN (fn () => T.output(os, "area, place_id, place_k,")) npick ()
+    val _ = T.output(os,"\n")
+
+    val nstep   = tStop div recstep
+    fun step city = let
+      val city = Iterator.applyN F.advanceTime recstep city
+      (* val pop  = Probe.reducePop' city *)
+    in
+      city before 
+        (T.output(os, fI (#time city) ^ ",")
+        ;app (fn per => T.output(os, Probe.showPlace_t (#visit (deP per)))) 
+           (List.take (#2 (#area city $ JOJ), npick))
+        ;T.output(os,"\n")
+        )
     end
   in
     Iterator.applyN step nstep city 
@@ -788,3 +886,5 @@ end
   にいるときは、電車の現在ではなく、「電車」という仮想都市にいることにする
   のが良いだろう。
 *)
+
+
