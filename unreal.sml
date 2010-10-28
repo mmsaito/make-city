@@ -580,14 +580,7 @@ structure Probe = struct
 
   fun getPerson (city:city) (area_t:area_t) (idx:id) = 
     List.nth(#2 (#area city $ area_t), idx)
-(*
-  fun showPlace_k Sch   = "Sch"
-    | showPlace_k Corp  = "Corp"
-    | showPlace_k Home  = "Home"
-    | showPlace_k Super = "Super"
-    | showPlace_k Park  = "Park"
-    | showPlace_k Train = "Train"
- *)
+
   fun showPlace_k Sch   = "1"
     | showPlace_k Corp  = "2"
     | showPlace_k Home  = "3"

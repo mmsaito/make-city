@@ -1,6 +1,6 @@
+(* 人口と振る舞いの具体的なデザイン *)
 structure Trivial = struct
 (* ================================================================ *)
-(* 具体的な構成を決める手続き *)
   open Type
   infix 7 times
   val op <> = fn (x,y) => x y; infix 1 <>;
@@ -15,12 +15,27 @@ structure Trivial = struct
   fun rndselV (v: 'a vector) = 
     v $ (Int.mod (Random.randInt rnd, Vector.length v))
 
-  (* 感染に関わる定数 *)
-  val betaNHome  = 1.4 * gamma
-  val betaNSch   = 1.8 * gamma
-  val betaNSuper = 1.4 * gamma
-  val betaNCorp  = 1.8 * gamma
-  val e0_JOJ     = 30
+  (* モデル設定パラメータ:
+    実装上の注意: 内容はtenativeかつadhocである。型を立てるのは、記述上の便宜のためであって、
+      設計上の理由ではない。
+   *)
+  type conf = 
+    {betaNHome : real
+    ,betaNSch  : real
+    ,betaNSuper: real
+    ,betaNCorp : real
+    ,e0_JOJ    : int
+    ,nPop      : int (* ひとつの街の人口。後で配列にする *)
+    }
+  (* 設定例 *)
+  val conf0: conf =
+    {betaNHome  = 1.4 * gamma
+    ,betaNSch   = 1.8 * gamma
+    ,betaNSuper = 1.4 * gamma
+    ,betaNCorp  = 1.8 * gamma
+    ,e0_JOJ     = 30
+    ,nPop       = 3000
+    }
 
   (* 人口分布に似た簡単な分布がある:   クラーク分布 *)
   (* ====================================================================  *)
@@ -30,15 +45,12 @@ structure Trivial = struct
   (* 次のような振る舞い
    * 会社員: 月～金は会社へ、土日は会社以外に適当に
    * 主婦  : 一日n回はスーパーに行く。
-   *   p[1/step] * Δt^{-1}[steps/day] = n[/day] =>  p = nΔt
    *
-   * シミュレーションの1ステップΔtと時間間隔のステップ数表示
-   *   - Δtは[day]の単位で書かれているとする 
-   *     <=> Δt[days/step]            <=> Δt^{-1}[steps/day]
-   *     <=> Δt^{-1}/24[steps/hour]   <=> 24Δt [hour/steps]
-   *     <=> Δt^{-1}/24/60[steps/min] <=> 24*60*Δt [min/steps]
-   *        per n unit = 1.0*unit / n
-   *        unit = {day = 1, hour = 24, min = 24*60}
+   * ステップ数 nsteps => 物理的時間
+   *   分に  : nsteps * minutes
+   *   時間に: nsteps * hours
+   *   日に  : nsteps * days
+   *
    * 回帰処理: 「毎日帰宅する」
    *   ... これをリアリスティックに書くのはむつかしい。第0近似として、
    *     - 午後8時 - 午後10時: 確率 p でHomeを目的値にセットする。
@@ -59,9 +71,8 @@ structure Trivial = struct
   in
     if (1 <= weekday andalso weekday <= 5) then
       if (6.0 <= hour andalso hour < 10.0) then
-        let (* val pr = 1.0 times per 4.0 hours *)
-            val pr = 1.0/(4.0*hours - (rI step - 6.0*hours))
-        in [(pr, corp()), (1.0 - pr, #visit p)] end
+        let val pr = 1.0/(4.0*hours - (rI step - 6.0*hours)) 
+        in  [(pr, corp()), (1.0 - pr, #visit p)] end
       else if (hour < 18.0) then
         [(1.0, #visit p)]
       else if (18.0 <= hour andalso hour <= 22.0) then
@@ -71,12 +82,9 @@ structure Trivial = struct
         [(1.0, home())]
     else
       if (hour < 18.0) then
-        let 
-          val n  = Real.fromInt (length (#belong p))
-          val pr = (1.0 times per 1.0 days) / n
-        in 
-          (1.0 - n*pr, #visit p) :: map (fn place => (pr, place)) (#belong p)
-        end
+        let val n  = Real.fromInt (length (#belong p))
+            val pr = (1.0 times per 1.0 days) / n
+        in  (1.0 - n*pr, #visit p) :: map (fn place => (pr, place)) (#belong p) end
       else 
         [(1.0, home())]
   end
@@ -188,55 +196,64 @@ structure Trivial = struct
 
   (* ====================================================================  *)
   (* 上記ルールによる都市の組み立て *)
-  fun per ()     = F.makePerson 3000 rulePerson
-  fun perHome at = F.makeHome at betaNHome (per ()) ruleHome
-  fun place   at home = 
+  fun perHome (conf:conf) at = 
+    F.makeHome at (#betaNHome conf) (F.makePerson (#nPop conf) rulePerson) ruleHome
+  fun place (conf:conf) at home = 
     F.makePlace at home
-      [(10,rulePlace Sch  100  betaNSch)
-      ,(10,rulePlace Super 20  betaNSuper)
-      ,(19,rulePlace Corp  15  betaNCorp)
+      [(10,rulePlace Sch  100 (#betaNSch   conf))
+      ,(10,rulePlace Super 20 (#betaNSuper conf))
+      ,(19,rulePlace Corp  15 (#betaNCorp  conf))
       ]
-  fun infect (area:area) = 
+  fun infect (conf:conf)(area:area) = 
     if (#1 area = JOJ) 
-      then F.distInfect rnd area [(e0_JOJ,EXP 0)]
+      then F.distInfect rnd area [(#e0_JOJ conf,EXP 0)]
       else area
-  val area = 
+  fun area (conf:conf) = 
     Vector.map (fn at => 
       (fn (per,home) => 
-        infect (at,per,place at home)
-      ) (perHome at)) 
+        infect conf (at,per,place conf at home)
+      ) (perHome conf at)) 
         #[HAC, TAC, JOJ, SJK, TKY]
   val train = F.makeTrains 
     {time2next = time2next, services = services, betaN = 0.5, size = 200}
 
-  val city  = F.evalPlace
-    {area = F.makeVisit' area ruleVisit
-    ,train = train
-    ,time = 0
-    }
+  fun city (conf:conf) = 
+    F.evalPlace
+      {area = F.makeVisit' (area conf) ruleVisit
+      ,train = train
+      ,time = 0
+      }
+
   (* 3000人 、1日で、45[sec] 
      150万人、1日で、6.25[時間]    (実スケール)
      15万人 、1日で、37.5[分]      (1/10スケール)
      15万人 、1週間で、4.375[時間] (1/10スケール)
      15万人 、6か月で、4.6875[日]  (1/10スケール)
    * *)
+
   (* 設定の書き出し、とても てんたてぃぶ *)
-  fun writeConf f = let
+  fun writeConf (conf:conf) f = let
     val os = T.openOut f
   in
-    (T.output(os, "alpha," ^ fG 14 Type.alpha ^ "\n")
-    ;T.output(os, "gamma," ^ fG 14 Type.gamma ^ "\n")
-    ;T.output(os, "betaNHome," ^ fG 14 betaNHome ^ "\n")
-    ;T.output(os, "betaNSch," ^ fG 14 betaNSch ^ "\n")
-    ;T.output(os, "betaNCorp," ^ fG 14 betaNCorp ^ "\n")
-    ;T.output(os, "betaNSuper," ^ fG 14 betaNSuper ^ "\n")
-    ;T.output(os, "e0_JOJ," ^ fI e0_JOJ ^ "\n")
+    (T.output(os, "alpha,"     ^ fG 14 Type.alpha ^ "\n")
+    ;T.output(os, "gamma,"     ^ fG 14 Type.gamma ^ "\n")
+    ;T.output(os, "betaNHome," ^ fG 14 (#betaNHome conf) ^ "\n")
+    ;T.output(os, "betaNSch,"  ^ fG 14 (#betaNSch conf) ^ "\n")
+    ;T.output(os, "betaNCorp," ^ fG 14 (#betaNCorp conf) ^ "\n")
+    ;T.output(os, "betaNSuper,"^ fG 14 (#betaNSuper conf) ^ "\n")
+    ;T.output(os, "e0_JOJ,"    ^ fI (#e0_JOJ conf) ^ "\n")
     ;T.closeOut os
     )
   end
 
-  fun run1 recstep tStop file city = let
-    val () = writeConf ("conf_" ^ file ^ ".csv")
+  (* トップレベル関数 = C/Fortranでコマンドラインにあたる関数たち *)
+  (* 実装上の注意:
+     動作を決める引数はいまのところ conf型としているが、じきにパラメータ数が
+     多くなって手に負えなくなるので、label{X}{不完全なパラメータ}からconf型を完成される
+     ルーチンを書いて、ref{X}を引数にとるようにせよ。
+   *)
+  fun run1 conf recstep tStop file city = let
+    val () = writeConf conf ("conf_" ^ file ^ ".csv")
     val os = T.openOut ("pop_" ^ file ^ ".csv")
     val () = Probe.showPopTag os 5
     val nstep   = tStop div recstep
@@ -252,9 +269,9 @@ structure Trivial = struct
   end
 
   
-  fun run2 recstep tStop file (*city*) = let
+  fun run2 conf recstep tStop file (*city*) = let
     val npick = 20
-    val () = writeConf ("conf_" ^ file ^ ".csv")
+    val () = writeConf conf ("conf_" ^ file ^ ".csv")
     val os = T.openOut ("trip_" ^ file ^ ".csv")
     (* tag *)
     val _ = T.output(os,"t,")
@@ -274,7 +291,7 @@ structure Trivial = struct
         )
     end
   in
-    Iterator.applyN step nstep city 
+    Iterator.applyN step nstep (city conf)
       before T.closeOut os
   end
 end
