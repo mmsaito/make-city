@@ -87,7 +87,15 @@ structure Type = struct
     val TKY = 4:area_t
 
   datatype place_k = Sch | Corp | Home | Super | Park | Train
-  type place_t = {place_k: place_k, area_t: area_t, id: id}
+
+  (* 場所を特定するタプル *)
+  (* 【実装上の注意】
+     参照型のtVisはpersonのフィールドに現れるときのみ意味を持つ。
+     これは、「あるひとがその場所に移動した時刻」を記述するためのトリック。
+     in-place replaceを実現するために参照型になっている。
+  *)
+  type place_t = {place_k: place_k, area_t: area_t, id: id, tVis:time ref}
+
   type nVis  = {s: size ref, e: size ref, i: size ref, r: size ref, v: size ref}
     fun zeroNVis (): nVis = {s = ref 0, e = ref 0, i = ref 0, r = ref 0, v = ref 0}
     fun clearNVis ({s,e,i,r,v}:nVis) = (s := 0; e := 0; i := 0; r := 0; v := 0)
@@ -155,7 +163,7 @@ structure Type = struct
     List.filter (fn plc => i = #area_t plc) (#belong p)
   end
   (* place_t で指定される場所を全都市から探す *)
-  fun placeAreas (areas: area vector) ({area_t,place_k,id}: place_t) =
+  fun placeAreas (areas: area vector) ({area_t,place_k,id,...}: place_t) =
     case place_k 
       of Home  => (#home  o #3) (areas $ area_t) $ id
        | Corp  => (#corp  o #3) (areas $ area_t) $ id
@@ -200,7 +208,7 @@ structure Frame = struct
     val idx = cnt ()
     fun home (ps:per2 list): (person list) * place = let
       val hm: place = 
-        {id    = {area_t = area_t, place_k = Home, id = idx ()}
+        {id    = {area_t = area_t, place_k = Home, id = idx (), tVis = ref ~1}: place_t
         ,nVis  = zeroNVis()
         ,pTrns = zeroPTrns()
         ,size  = length ps
@@ -299,7 +307,7 @@ structure Frame = struct
     infix 9 $; val op $ = Vector.sub
   in
     Vector.map (fn {deptime, stations} => 
-        {id    = {place_k = Train, area_t = 0, id = idx ()}
+        {id    = {place_k = Train, area_t = 0, id = idx (), tVis = ref ~1}
         ,nVis  = zeroNVis()
         ,pTrns = zeroPTrns()
         ,size  = size
@@ -374,8 +382,8 @@ structure Frame = struct
   fun doTransit ({area=areas,train,time}:city) (PERSON p: person): health list = let
     val pTrns =
       case #visit p 
-        of {place_k = Train, id, area_t} => #pTrns (train $ id)
-         | place_t                       => #pTrns (placeAreas areas place_t)
+        of {place_k = Train, id, ...} => #pTrns (train $ id)
+         | place_t                    => #pTrns (placeAreas areas place_t)
     val cur::hist = #health p
   in
     (* 注: 履歴のとり方に注意。リスト連結は、効率が悪いが、簡潔に書くにはこう。
@@ -433,7 +441,7 @@ structure Frame = struct
     val steps   = (#time city) mod steps_per_day 
   in
     if (steps = time') then
-      {id    = {place_k = Train, id = #id (#id tr), area_t = area_t'}
+      {id    = {place_k = Train, id = #id (#id tr), area_t = area_t', tVis = #tVis (#id tr)}
       ,nVis  = #nVis tr
       ,pTrns = #pTrns tr
       ,size  = #size tr
@@ -507,7 +515,7 @@ structure Frame = struct
     fun addVis (PERSON p:person) = let
       val nVis =
         case #visit p 
-          of {place_k = Train, id, area_t} => #nVis (train $ id)
+          of {place_k = Train, id, area_t, ...} => #nVis (train $ id)
            | others => #nVis (placeAreas areas others)
     in
       case hd (#health p)
@@ -588,7 +596,7 @@ structure Probe = struct
     | showPlace_k Park  = "5"
     | showPlace_k Train = "6"
 
-  fun showPlace_t ({area_t,id,place_k}:place_t) = 
+  fun showPlace_t ({area_t,id,place_k,...}:place_t) = 
     fI area_t ^ "," ^ fI id ^ "," ^ showPlace_k place_k ^ ","
 end
 

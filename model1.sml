@@ -169,7 +169,7 @@ structure Trivial = struct
     }: place
 
   fun rulePlace place_k size betaN area_t id = 
-    rulePlace' size betaN {place_k = place_k, area_t = area_t, id = id}
+    rulePlace' size betaN {place_k = place_k, area_t = area_t, id = id, tVis = ref ~1}
 
   (* s“®”ÍˆÍƒ‹[ƒ‹ *) 
   fun ruleVisit (areas: area vector)(PERSON p: person): place_t list = let
