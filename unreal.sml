@@ -47,6 +47,10 @@ structure Type = struct
   val days    = 1.0/dt
   val hours   = 1.0/24.0/dt
   val minutes = 1.0/24.0/60.0/dt
+  
+  val days'   = Alice.iR days
+  val hours'  = Alice.iR hours
+  val minutes'= Alice.iR minutes
 
   fun timecomp (t:time) = let
     val step    = t mod steps_per_day
@@ -120,20 +124,24 @@ structure Type = struct
      単にフィールド追加にする。
    *)
   datatype person = PERSON of
-    { age   : age
-    , gender: gender
-    , role  : role
-    , belong: place_t list
-    , visit : place_t
-    , dest  : place_t option
-    , health: health list
-    , genSched : person * time -> (real * place_t) list
+    { age    : age
+    , gender : gender
+    , role   : role
+    , belong : place_t list
+    , visit  : place_t
+    , dest   : place_t option
+    , health : health list
+    , mkSched: person * time -> (time * place_t) list
+    , sched  : (time * place_t) list
     } 
-  fun deP (PERSON p) = p
-  (* 中間構造体 *)
-    (* type per1 = {age: age, gender: gender} *)
-    type per2 = {age: age, gender: gender, role: role, genSched: person * time -> (real * place_t) list}
-    (* type per3 = {age: age, gender: gender, role: role, belong: place_t list} *)
+    fun deP (PERSON p) = p
+    (* 中間構造体 *)
+    type per2 = 
+      { age     : age
+       , gender : gender
+       , role   : role
+       , mkSched: person * time -> (time * place_t) list
+       }
 
   type places = 
     { cram : place vector
@@ -230,7 +238,8 @@ structure Frame = struct
           ,belong = (#id hm) :: nil
           ,dest   = NONE
           ,health = SUS :: nil
-          ,genSched = #genSched p
+          ,mkSched = #mkSched p
+          ,sched  = nil
           }
         ) ps 
     in
@@ -280,7 +289,8 @@ structure Frame = struct
       ,visit  = #visit x
       ,dest   = #dest x
       ,health = #health x
-      ,genSched = #genSched x
+      ,mkSched = #mkSched x
+      ,sched   = #sched x
       }
     fun asg (id, pop, places): area =
       (id, map ext pop, places)
@@ -356,7 +366,8 @@ structure Frame = struct
                   if (hd (#health p) = stat) 
                     then #health p
                     else stat :: tl (#health p)
-              , genSched = #genSched p
+              , mkSched = #mkSched p
+              , sched    = #sched p
               }:person
           ) target :: modified
           ,per)
@@ -400,12 +411,12 @@ structure Frame = struct
     val cur::hist = #health p
   in
     (* 注: 履歴のとり方に注意。リスト連結は、効率が悪いが、簡潔に書くにはこう。
-     * rndsel rnd (#s2e pTrns) (EXP time, cur) :: cur :: hist ではない!!
+     * rndSel rnd (#s2e pTrns) (EXP time, cur) :: cur :: hist ではない!!
      * という間違ったことをすると、10倍遅くなる。*)
     case cur
-      of SUS   => rndsel rnd (#s2e pTrns) ([EXP time, cur],[cur]) @ hist
-       | EXP _ => rndsel rnd (#e2i pTrns) ([INF time, cur],[cur]) @ hist
-       | INF _ => rndsel rnd (#i2r pTrns) ([REC time, cur],[cur]) @ hist
+      of SUS   => rndSel rnd (#s2e pTrns) ([EXP time, cur],[cur]) @ hist
+       | EXP _ => rndSel rnd (#e2i pTrns) ([INF time, cur],[cur]) @ hist
+       | INF _ => rndSel rnd (#i2r pTrns) ([REC time, cur],[cur]) @ hist
        | _     => cur :: hist
   end
 
@@ -415,9 +426,10 @@ structure Frame = struct
 
   fun evalPerson (city:city) (PERSON p: person) = let
     val {area=areas,train,time} = city
-    fun movetrns {visit, dest} = PERSON
+    fun update {visit, dest, sched} = PERSON
       { age    = #age p, gender = #gender p, role = #role p, belong = #belong p
-      , genSched  = #genSched p
+      , mkSched  = #mkSched p
+      , sched  = sched
       , visit  = visit
       , dest   = dest     
       , health = doTransit city (PERSON p)
@@ -426,29 +438,41 @@ structure Frame = struct
         (if #place_k visit <> #place_k (#visit p) 
              orelse #id visit <> #id (#visit p) then 
           #tVis visit := time else ())
-    fun trns() = movetrns {visit = #visit p, dest = #dest p}
     val myArea = #area_t (#visit p)
+    fun consumeSched () = 
+      case #mkSched p (PERSON p, time)
+        of (time',dst') :: sched => 
+          if (time >= time') 
+            then (dst'    , sched)
+            else (#visit p, (time',dst')::sched)
+         | nil => (#visit p, nil)
+    fun newSched() = let
+      val aa = #mkSched p (PERSON p, time)
+    in
+      if time mod days' = 0 andalso null aa then
+        (print ("fanny empty!!, role = " ^ Int.toString (Unsafe.cast (#role p): int) ^ "\n"); aa)
+      else
+        aa
+    end
   in
     case #dest p
       of NONE => 
         let
-          (* ランダムに行き先を選び、町内であればそこへ、でなければ「駅」に向かう *)
-          (* val dest = rndSelL rnd (#belong p) *)
-          val dest = rndSelLP rnd (#genSched p (PERSON p, time))
+          val (dest,sched') = consumeSched ()
         in
           if (#area_t dest = myArea)
-            then movetrns {visit = dest, dest = NONE}
-            else movetrns {visit = #visit p, dest = SOME dest} end
+            then update {visit = dest    , dest = NONE     , sched = sched'}
+            else update {visit = #visit p, dest = SOME dest, sched = sched'} end
        | SOME dest =>
           (* 乗れる電車があれば乗る。そして、目的地でおりる *)
           if (#place_k (#visit p) = Train) then 
             if (#area_t (#id (train $ #id (#visit p))) = #area_t dest) then
-              movetrns {visit = dest, dest = NONE}
+              update {visit = dest, dest = NONE, sched = newSched()}
             else
-              trns () 
+              update {visit = #visit p, dest = #dest p, sched = newSched()}
           else (case catchTrain (train, time, myArea, #area_t dest)
-            of SOME tr => movetrns {visit = #id tr, dest = SOME dest}
-             | NONE    => trns ()
+            of SOME tr => update {visit = #id tr  , dest = SOME dest, sched = newSched()}
+             | NONE    => update {visit = #visit p, dest = #dest p  , sched = newSched()}
           )
   end
 

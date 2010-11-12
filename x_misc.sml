@@ -13,12 +13,18 @@ in
   in
     sqrt(~2.0*ln u1)*cos(2.0*pi*u2)
   end
-  fun rndsel rnd p (x,y) = 
+
+  fun irndIn rnd (x,y) = 
+    x + (Random.randInt rnd) mod (y - x)  
+
+  fun rndSel rnd p (x,y) = 
     if (Random.randReal rnd < p) 
       then x
       else y
-  fun rndselV rnd v =
+
+  fun rndSelV rnd v =
     Vector.sub(v, Int.mod (Random.randInt rnd, Vector.length v))
+
   fun rndSelL rnd l = let
     val j = Int.mod (Random.randInt rnd, length l)
     val i = ref 0

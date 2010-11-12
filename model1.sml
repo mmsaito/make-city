@@ -12,8 +12,6 @@ structure Trivial = struct
   open Alice;
   open EasyPrint;
   val rnd = Random.rand (0,1);
-  fun rndselV (v: 'a vector) = 
-    v $ (Int.mod (Random.randInt rnd, Vector.length v))
 
   (* モデル設定パラメータ:
     実装上の注意: 内容はtenativeかつadhocである。型を立てるのは、記述上の便宜のためであって、
@@ -25,6 +23,7 @@ structure Trivial = struct
     ,betaNSuper: real
     ,betaNCorp : real
     ,betaNPark : real
+    ,betaNTrain: real
     ,e0_JOJ    : int
     ,nPop      : int (* ひとつの街の人口。後で配列にする *)
     }
@@ -34,6 +33,7 @@ structure Trivial = struct
     ,betaNSch   = 1.8 * gamma
     ,betaNSuper = 1.4 * gamma
     ,betaNCorp  = 1.8 * gamma
+    ,betaNTrain = 1.8 * gamma
     ,betaNPark  = 0.5 * gamma
     ,e0_JOJ     = 30
     ,nPop       = 3000
@@ -46,13 +46,15 @@ structure Trivial = struct
     {age=23.0:age, gender = F
     ,belong = [ {place_k = Super, area_t = 0, id = 0, tVis = ref ~1}
               , {place_k = Park , area_t = 0, id = 0, tVis = ref ~1}
+              , {place_k = Corp , area_t = 0, id = 0, tVis = ref ~1}
               , vis
               ]: place_t list
     ,visit  = vis
     ,role   = Hausfrau
     ,dest   = NONE: place_t option
     ,health = nil: health list
-    ,genSched  = fn (_:person*time) => nil: (real*place_t) list
+    ,sched  = nil: (time * place_t) list
+    ,mkSched  = (fn _ => nil): person * time -> (time * place_t) list
     }
   end
 
@@ -62,235 +64,128 @@ structure Trivial = struct
 
   (* 行動テンプレート *)
   (* 次のような振る舞い
+   * ToDo: このこめんとをきちんとメンテナンスしておくように。
    * 会社員: 月～金は会社へ、土日は会社以外に適当に
    * 主婦  : 一日n回はスーパーに行く。
    *
-   * ステップ数 nsteps => 物理的時間
-   *   分に  : nsteps * minutes
-   *   時間に: nsteps * hours
-   *   日に  : nsteps * days
-   *
-   * 回帰処理: 「毎日帰宅する」
-   *   ... これをリアリスティックに書くのはむつかしい。第0近似として、
-   *     - 午後8時 - 午後10時: 確率 p でHomeを目的値にセットする。
-   *       ただし、p = 24Δt/2 = 12Δt
-   *     - 午後11時 -        : 確率1でHomeを目的値にセットする。
-   *
-   * e-folding time を T とすると、tだけ経過したときの残留率は、
-       t = T: 36%, t = 2T: 13%, t = 3T: 5%, {t = 4T: 2%}, t = 5T: 0.7%
-   * 出勤時刻をNステップいないで一様にするには、
-       pk = 1/(N - k).  (k=0,...,N-1)
    *)
+  
   (* 会社員のスケジュール *)
-  fun schedEmp (PERSON p, t:time): (real * place_t) list = let
-    val Employed = #role p
+  fun schedEmp (PERSON p, t:time): (time * place_t) list = let
     val {day,weekday,hour,step} = timecomp t
     fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
     fun corp() = valOf (List.find (fn {place_k = Corp, ...} => true | _ => false) (#belong p))
+    val today = day*days'
   in
-    if (1 <= weekday andalso weekday <= 5) then
-      if (6.0 <= hour andalso hour < 10.0) then
-        let val pr = 1.0/(4.0*hours - (rI step - 6.0*hours)) 
-        in  [(pr, corp()), (1.0 - pr, #visit p)] end
-      else if (hour < 18.0) then
-        [(1.0, #visit p)]
-      else if (18.0 <= hour andalso hour <= 22.0) then
-        let val pr = 1.0/(4.0*hours - (rI step - 18.0*hours))
-        in [(pr, home()), (1.0 - pr, #visit p)] end
+    if (step = 0) then (* 毎日午前0時にスケジュールを立てる *)
+      if (1 <= weekday andalso weekday <= 5) then
+          [ (today + irndIn rnd ( 6*hours',10*hours'), corp())
+          , (today + irndIn rnd (18*hours',22*hours'), home())
+          ]
       else
-        [(1.0, home())]
+        Misc.qsortL (fn ((t,_),(t',_)) => Int.compare(t,t')) (
+          (today + 18*hours', home()) ::
+          ListPair.zip
+            ( List.tabulate
+               ( irndIn rnd (1,length (#belong p))
+               , fn _ => today + irndIn rnd (10*hours',18*hours'))
+            , #belong p)
+        ) 
     else
-      if (hour < 18.0) then
-        let val n  = Real.fromInt (length (#belong p))
-            val pr = (1.0 times per 1.0 days) / n
-        in  (1.0 - n*pr, #visit p) :: map (fn place => (pr, place)) (#belong p) end
-      else 
-        [(1.0, home())]
+      #sched p
   end
-   
+
   (* 学生のスケジュール *)
-  (* マルコフ的な記述だと管理がとても面倒。 
-   *   日のはじめに、行動を決定する方式の方が自然書けるはず。
-   *   書きなおしてみよ。
-   * *)
-  
-  fun schedStu (PERSON p, t:time): (real * place_t) list = let
-    val Student = #role p
-    val {day,weekday,hour,step} = timecomp t
+  fun schedStu (PERSON p, t:time): (time * place_t) list = let
+    val {day=day,weekday,hour,step} = timecomp t
+    val today = day*days'
     fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
     fun sch()  = valOf (List.find (fn {place_k = Sch , ...} => true | _ => false) (#belong p))
     fun cram() = List.find (fn {place_k = Cram, ...} => true | _ => false) (#belong p)
   in
-    if (1 <= weekday andalso weekday <= 5) then
-      if (6.0 <= hour andalso hour <= 8.0) then
-        let val pr = 1.0/(8.0*hours - rI step)
-        in [(pr, sch()), (1.0 - pr, #visit p)] end
-      else if (hour < 15.0) then
-        [(1.0, #visit p)]
-      else if (16.0 <= hour andalso hour <= 19.0) then
-        let val pr = 1.0/(19.0*hours - rI step)
-        in [(pr, home()), (1.0 - pr, #visit p)] end
-      else if (20.0 <= hour andalso hour < 22.0) then
-        case cram()
-          of SOME cram => [(1.0, cram) ]
-           | _         => [(1.0, home())]
+    if (step = 0) then (* 毎日午前0時にスケジュールを立てる *)
+      if 1 <= weekday andalso weekday <= 5 then
+          [ (today + irndIn rnd ( 6*hours', 8*hours'), sch() )
+          , (today + irndIn rnd (16*hours',19*hours'), home())
+          ] 
+          @(case cram() 
+            of SOME cram => 
+              [ (today + irndIn rnd (19*hours', 20*hours'), cram)
+              , (today + irndIn rnd (21*hours', 22*hours'), home())
+              ]
+             | NONE => nil)
       else
-        [(1.0, home())]
+        (* 10時～18時の間、適当な時間に適当な場所をうろつく *)
+        (* ダブルブッキングが生じ得るが...どうしようか *)
+        Misc.qsortL (fn ((t,_),(t',_)) => Int.compare(t,t')) (
+          (today + 18*hours', home()) ::
+          ListPair.zip
+            ( List.tabulate
+               ( irndIn rnd (1,length (#belong p))
+               , fn _ => today + irndIn rnd (10*hours',18*hours'))
+            , #belong p)
+        )
     else
-      if (hour < 18.0) then
-        let 
-          val n  = Real.fromInt (length (#belong p))
-          val pr = (1.0 times per 1.0 days) / n
-        in 
-          (1.0 - n*pr, #visit p) :: map (fn place => (pr, place)) (#belong p)
-        end
-      else 
-        [(1.0, home())]
+      #sched p
   end
 
-  fun schedStu2 (PERSON p, t:time): (real * place_t) list = let
-    val Student = #role p
-    val {day,weekday,hour,step} = timecomp t
-    fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
-    fun sch()  = valOf (List.find (fn {place_k = Sch , ...} => true | _ => false) (#belong p))
-    fun cram() = List.find (fn {place_k = Cram, ...} => true | _ => false) (#belong p)
+  fun schedHaus (PERSON p, t:time): (time * place_t) list = let
+    (* 注意: 厳密には、区間演算をする必要があるが、面倒なのでさぼっている *)
+    val {day=day,weekday,hour,step} = timecomp t
+    val today = day*days'
+    fun supers() = List.filter (fn p => #place_k p = Super) (#belong p)
+    val sort = Misc.qsortL (fn ((t,_,_),(t',_,_)) => Int.compare (t,t')) 
   in
-    if (1 <= weekday andalso weekday <= 5) then
-      if (6.0 <= hour andalso hour <= 8.0) then
-        let val pr = 1.0/(8.0*hours - rI step)
-        in [(pr, sch()), (1.0 - pr, #visit p)] end
-      else if (hour < 15.0) then
-        [(1.0, #visit p)]
-      else if (16.0 <= hour andalso hour <= 19.0) then
-        let val pr = 1.0/(19.0*hours - rI step)
-        in [(pr, home()), (1.0 - pr, #visit p)] end
-      else if (20.0 <= hour andalso hour < 22.0) then
-        case cram()
-          of SOME cram => [(1.0, cram) ]
-           | _         => [(1.0, home())]
-      else
-        [(1.0, home())]
-    else
-      if (hour < 18.0) then
-        let 
-          val n  = Real.fromInt (length (#belong p))
-          val pr = (1.0 times per 1.0 days) / n
-        in 
-          (1.0 - n*pr, #visit p) :: map (fn place => (pr, place)) (#belong p)
-        end
-      else 
-        [(1.0, home())]
-  end
+    if (step = 0) then
+      let 
+        (* (1) 場所ごとの滞在期間を計算する *)
+        (* (1a) 一日のどこかの時点でたかだか1時間の買い物をする *)
+        val tInSuper  = today    + irndIn rnd (10*hours', 20*hours')
+        val tOutSuper = tInSuper + irndIn rnd (10*minutes', 1*hours')
+        (* 行きつけりスーパーが2個以上あってもいいかもしれぬ。 *)
+        val schedS = (tInSuper, tOutSuper, rndSelL rnd (supers()))
 
+        (* (1b) 別の場所にも行くかもしれない *)
+        val others = List.filter (fn {place_k=x,...} => x <> Super andalso x <> Home) (#belong p)
+        val nO = irndIn rnd (0,length others + 1)
+        val schedO = List.tabulate 
+          ( nO, fn _ => let val tIn  = today + irndIn rnd (10*hours', 20*hours')
+                            val tOut = tIn   + irndIn rnd (0*hours' , 2*hours' )
+                        in (tIn, tOut, rndSelL rnd others) end)
 
-
-
-  (* 主婦のスケジュール *)
-  fun schedHaus (PERSON p, t:time): (real * place_t) list = let
-    val {day,weekday,hour,step} = timecomp t
-    val Hausfrau = #role p
-    local
-      val nH = ref 0
-      val nS = ref 0
-      val nO = ref 0
-      fun k ({place_k,...}:place_t) = place_k
-      fun inc Home  = nH := !nH + 1
-        | inc Super = nS := !nS + 1
-        | inc _     = nO := !nO + 1
-      val () = app (inc o k) (#belong p)
-    in
-      val nH = rI (!nH)
-      val nS = rI (!nS)
-      val nO = rI (!nO)
-    end
-
-    (* スーパーを最後に訪問した日付 *)
-    fun isSuper ({place_k,...}: place_t) = place_k = Super
-    val dayVisitedSuper = 
-      foldl Int.max ~1 
-        o map (fn {tVis,...} => !tVis div steps_per_day)
-        o List.filter isSuper 
-        @@ (#belong p)
-  in
-    if (6.0 <= hour andalso hour <= 8.0) then
-      map (fn dst => if (#place_k dst = Home) then (1.0/nH,dst) else (0.0,dst)) (#belong p)
-    else if (8.0 <= hour andalso hour < 18.0) then
-      let
-        val tVis = !(#tVis (#visit p))
-        val prTo = 
-          case #place_k (#visit p) (* namely, src *)
-            of Home  =>
-              let
-                (* まず、カテゴリ別の遷移確率を計算する。
-                 * カテゴリとして家庭、スーパー、その他の3つを考える *)
-                val pHS = if day > dayVisitedSuper then 1.0/(18.0*hours - rI step) else 0.0
-                val pHO = 1.0/5.0/hours
-                val pHH = 1.0 - pHO - pHS
-              in
-                (* つぎに、同一カテゴリのノード間で等分する *)
-                fn (dst:place_t) => case #place_k dst
-                  of Home  => pHH/nH
-                   | Super => pHS/nS
-                   | _     => pHO/nO
-              end
-             | Super => 
-              let 
-                val pSX = 1.0/(30.0*minutes - rI (t - tVis))
-                val pSO = 0.1*pSX (* Super1 -> Super2 も含む *)
-                val pSH = 0.9*pSX
-                val pSS = 1.0 - pSO - pSH
-                val nO' = nO + nS - 1.0
-              in
-                fn (dst:place_t) => case #place_k dst
-                  of Home  => pSH/nH
-                   | Super => 
-                       (* 同一カテゴリ間の遷移の場合は、自己遷移とそれ以外を区別する必要がある。
-                        * さらに、「別のスーパー」は便宜的に「その他の場所」として扱っている。*)
-                       if (#id (#visit p) = #id dst) 
-                         then pSS
-                         else pSO/nO'
-                   | _     => pSO/nO'
-              end
-             | _     => 
-              let
-                val pOH = 1.0/(3.0*hours - rI (t - tVis))
-                val pOO'= 1.0/2.0/hours
-                val pOS = if day > dayVisitedSuper then 1.0/(18.0*hours - rI step) else 0.0
-                val pOO = 1.0 - pOH - pOS - pOO'
-                val nO' = nO - 1.0
-              in
-                fn (dst:place_t) => case #place_k dst
-                  of Home  => pOH/nH
-                   | Super => pOS/nS
-                   | _     =>
-                       if (#id (#visit p) = #id dst) 
-                         then pOO
-                         else pOO'/nO'
-              end
+        val home = valOf (List.find (fn p => #place_k p = Home) (#belong p))
+        (* (2) 場所毎の滞在時刻の間隔から旅程を連結する *)
+        fun connect (x::x'::xs) = 
+          let val (tb,te,p) = x
+              val (tb',te',p') = x'
+          in
+             if tb < tb' 
+               then (tb,p)::(te,home)::connect (x'::xs) 
+               else (tb,p)           ::connect (x'::xs)
+          end
+          | connect ((tb,te,p)::nil) = (tb,p)::(te,home)::nil (* いづれ、家に帰る *)
+          | connect nil = nil (* unreachable *)
       in
-        map (fn dst => (prTo dst, dst)) (#belong p)
+        connect (sort (schedS :: schedO))
       end
     else
-      map (fn dst => if (#place_k dst = Home) then (1.0/nH,dst) else (0.0,dst)) (#belong p)
+      #sched p
   end
-
-
-
 
   (* 人間生成ルール *)
   fun rulePerson id = let
     val age    = Real.abs (30.0 + 30.0*rgauss rnd)
-    val gender = rndsel rnd 0.5 (F,M)
+    val gender = rndSel rnd 0.5 (F,M)
     val (role,sched)   = 
       if (age <= 22.0)     then (Student, schedStu)
       else if (age < 60.0) then
         case gender
-          of F => rndsel rnd 0.6 ((Employed,schedEmp), (Hausfrau,schedHaus))
-           | M => rndsel rnd 0.8 ((Employed,schedEmp), (Hausfrau,schedHaus))
+          of F => rndSel rnd 0.6 ((Employed,schedEmp), (Hausfrau,schedHaus))
+           | M => rndSel rnd 0.8 ((Employed,schedEmp), (Hausfrau,schedHaus))
       else
         (Hausfrau,schedHaus)
   in
-    {age = age, gender = gender, role = role, genSched = sched}
+    {age = age, gender = gender, role = role, mkSched = sched}
   end
 
   (* 家族構成ルール *)
@@ -313,14 +208,22 @@ structure Trivial = struct
   fun ruleVisit (areas: area vector)(PERSON p: person): place_t list = let
     val i0 = areaPer (PERSON p)
     val (_,_,a0) = areas $ i0
-    val (_,_,a') = rndselV areas
-    (* アイデア:
-     *   行き先の個数も、バラツカセタラ? *)
+    val (_,_,a') = rndSelV rnd areas
+
+    infixr 2 `::
+    fun op `:: (SOME x,xs) = x :: xs
+      | op `:: (NONE  ,xs) = xs
+
+    fun crams() = List.filter (fn x => Vector.length x > 0) 
+                   (Misc.listV (Vector.map (#cram o #3) areas))
+    val selCram = rndSelLP rnd
+      [(0.4, fn () => SOME (rndSelV rnd (rndSelL rnd (crams()))))
+      ,(0.6, fn () => NONE)]
   in
     case #role p 
-      of Employed => map #id [rndselV (#corp a') , rndselV (#super a0)]
-       | Student  => map #id [rndselV (#sch a0)  , rndselV (#super a0)]
-       | HausFrau => map #id [rndselV (#super a0), rndselV (#park a0) ]
+      of Employed => map #id [rndSelV rnd (#corp a') , rndSelV rnd (#super a0)]
+       | Student  => map #id (selCram() `:: [rndSelV rnd (#sch a0), rndSelV rnd (#super a0)])
+       | HausFrau => map #id [rndSelV rnd (#super a0), rndSelV rnd (#park a0) ]
   end
 
   (* 鉄道運行ルール *)
@@ -366,13 +269,13 @@ structure Trivial = struct
         infect conf (at, per, place conf at home)
       ) (perHome conf at)) 
         #[HAC, TAC, JOJ, SJK, TKY]
-  val train = F.makeTrains 
-    {time2next = time2next, services = services, betaN = 0.5, size = 200}
+  fun train (conf:conf) = F.makeTrains 
+    {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
 
   fun city (conf:conf) = 
     F.evalPlace
       {area = F.makeVisit' (area conf) ruleVisit
-      ,train = train
+      ,train = train conf
       ,time = 0
       }
 
@@ -393,6 +296,7 @@ structure Trivial = struct
     ;T.output(os, "betaNSch,"  ^ fG 14 (#betaNSch conf) ^ "\n")
     ;T.output(os, "betaNCorp," ^ fG 14 (#betaNCorp conf) ^ "\n")
     ;T.output(os, "betaNSuper,"^ fG 14 (#betaNSuper conf) ^ "\n")
+    ;T.output(os, "betaNTrain,"^ fG 14 (#betaNTrain conf) ^ "\n")
     ;T.output(os, "e0_JOJ,"    ^ fI (#e0_JOJ conf) ^ "\n")
     ;T.closeOut os
     )
@@ -447,12 +351,3 @@ structure Trivial = struct
       before T.closeOut os
   end
 end
-
-(* 可視化について 
-* 初期のデバッグには、個人がどう動いたかが重要なので、単純に (時刻,都市) の
-  プロットをつくるのがよいだろう。はじめはぬきうち検査で。ただし、「電車」
-  にいるときは、電車の現在ではなく、「電車」という仮想都市にいることにする
-  のが良いだろう。
-*)
-
-
