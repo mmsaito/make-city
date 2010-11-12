@@ -127,12 +127,12 @@ structure Type = struct
     , visit : place_t
     , dest  : place_t option
     , health: health list
-    , sched: person * time -> (real * place_t) list
-    }
+    , genSched : person * time -> (real * place_t) list
+    } 
   fun deP (PERSON p) = p
   (* 中間構造体 *)
     (* type per1 = {age: age, gender: gender} *)
-    type per2 = {age: age, gender: gender, role: role, sched: person * time -> (real * place_t) list}
+    type per2 = {age: age, gender: gender, role: role, genSched: person * time -> (real * place_t) list}
     (* type per3 = {age: age, gender: gender, role: role, belong: place_t list} *)
 
   type places = 
@@ -230,7 +230,7 @@ structure Frame = struct
           ,belong = (#id hm) :: nil
           ,dest   = NONE
           ,health = SUS :: nil
-          ,sched = #sched p
+          ,genSched = #genSched p
           }
         ) ps 
     in
@@ -280,7 +280,7 @@ structure Frame = struct
       ,visit  = #visit x
       ,dest   = #dest x
       ,health = #health x
-      ,sched = #sched x
+      ,genSched = #genSched x
       }
     fun asg (id, pop, places): area =
       (id, map ext pop, places)
@@ -356,7 +356,7 @@ structure Frame = struct
                   if (hd (#health p) = stat) 
                     then #health p
                     else stat :: tl (#health p)
-              , sched = #sched p
+              , genSched = #genSched p
               }:person
           ) target :: modified
           ,per)
@@ -417,7 +417,7 @@ structure Frame = struct
     val {area=areas,train,time} = city
     fun movetrns {visit, dest} = PERSON
       { age    = #age p, gender = #gender p, role = #role p, belong = #belong p
-      , sched  = #sched p
+      , genSched  = #genSched p
       , visit  = visit
       , dest   = dest     
       , health = doTransit city (PERSON p)
@@ -434,7 +434,7 @@ structure Frame = struct
         let
           (* ランダムに行き先を選び、町内であればそこへ、でなければ「駅」に向かう *)
           (* val dest = rndSelL rnd (#belong p) *)
-          val dest = rndSelLP rnd (#sched p (PERSON p, time))
+          val dest = rndSelLP rnd (#genSched p (PERSON p, time))
         in
           if (#area_t dest = myArea)
             then movetrns {visit = dest, dest = NONE}

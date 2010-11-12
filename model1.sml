@@ -52,7 +52,7 @@ structure Trivial = struct
     ,role   = Hausfrau
     ,dest   = NONE: place_t option
     ,health = nil: health list
-    ,sched  = fn (_:person*time) => nil: (real*place_t) list
+    ,genSched  = fn (_:person*time) => nil: (real*place_t) list
     }
   end
 
@@ -290,7 +290,7 @@ structure Trivial = struct
       else
         (Hausfrau,schedHaus)
   in
-    {age = age, gender = gender, role = role, sched = sched}
+    {age = age, gender = gender, role = role, genSched = sched}
   end
 
   (* ‰Æ‘°\¬ƒ‹[ƒ‹ *)
