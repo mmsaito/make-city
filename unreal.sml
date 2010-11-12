@@ -27,7 +27,7 @@ x_t ∈ {Home, Corp, ...}
 p(x_t=Home|x_{t-1}=Corp,t) などを要素とする確率表を与える
 *)
 structure Type = struct
-  fun op <> (x,y) = x y; infix 1 <>;
+  fun op @@ (x,y) = x y; infix 1 @@;
   val op $ = Vector.sub; infix 9 $;
   exception Undef;
   fun undef () = raise Undef;
@@ -86,7 +86,7 @@ structure Type = struct
     val SJK = 3:area_t
     val TKY = 4:area_t
 
-  datatype place_k = Sch | Corp | Home | Super | Park | Train
+  datatype place_k = Cram | Sch | Corp | Home | Super | Park | Train
 
   (* 場所を特定するタプル *)
   (* 【実装上の注意】
@@ -95,6 +95,9 @@ structure Type = struct
      in-place replaceを実現するために参照型になっている。
   *)
   type place_t = {place_k: place_k, area_t: area_t, id: id, tVis:time ref}
+  (* なので、personレコードを完成するときにクローニングする必要がある *)
+  fun clone_place_t {place_k: place_k, area_t: area_t, id: id, tVis:time ref} = 
+    {place_k = place_k, area_t = area_t, id = id, tVis = ref (!tVis)}
 
   type nVis  = {s: size ref, e: size ref, i: size ref, r: size ref, v: size ref}
     fun zeroNVis (): nVis = {s = ref 0, e = ref 0, i = ref 0, r = ref 0, v = ref 0}
@@ -133,7 +136,8 @@ structure Type = struct
     (* type per3 = {age: age, gender: gender, role: role, belong: place_t list} *)
 
   type places = 
-    { sch  : place vector
+    { cram : place vector
+    , sch  : place vector
     , corp : place vector
     , park : place vector
     , super: place vector
@@ -157,24 +161,27 @@ structure Type = struct
   fun projHome x = 
     valOf (List.find (fn (p:place_t) => #place_k p = Home) x)
   fun areaPer (PERSON {belong, ...}:person) = #area_t (projHome belong)
+    (*
   fun localPer (PERSON p:person) = let
     val i = areaPer (PERSON p)
   in
     List.filter (fn plc => i = #area_t plc) (#belong p)
   end
+  *)
   (* place_t で指定される場所を全都市から探す *)
   fun placeAreas (areas: area vector) ({area_t,place_k,id,...}: place_t) =
     case place_k 
       of Home  => (#home  o #3) (areas $ area_t) $ id
        | Corp  => (#corp  o #3) (areas $ area_t) $ id
        | Sch   => (#sch   o #3) (areas $ area_t) $ id
+       | Cram  => (#cram  o #3) (areas $ area_t) $ id
        | Park  => (#park  o #3) (areas $ area_t) $ id
        | Super => (#super o #3) (areas $ area_t) $ id
        | Train => raise undef () (* unreachable *)
 end
 
 structure Frame = struct
-  open Type; infix 1 <>; infix 1 $;
+  open Type; infix 1 @@; infix 1 $;
   open X_Misc;
   open EasyPrint; infix 1 <<
   (* ============================================================== *)
@@ -235,6 +242,11 @@ structure Frame = struct
   end
 
   (* 3. 公共空間生成 *)
+  (* area_t: 場所を設置する街
+   * home  : 先に作った家庭の集まり。
+   * rules : 生成規則の集まり。各生成規則 (n,gen) に対して、
+   *   n個の場所を genから生成する。
+   *)
   fun makePlace (area_t:area_t) 
                 (home:place vector)
                 (rules: (size * (area_t -> id -> place)) list)
@@ -245,7 +257,8 @@ structure Frame = struct
     fun is x (p:place) = #place_k (#id p) = x
     fun filter c = Vector.fromList o (List.filter c)
   in
-    {sch   = filter (is Sch  ) places
+    {cram  = filter (is Cram ) places
+    ,sch   = filter (is Sch  ) places
     ,corp  = filter (is Corp ) places
     ,super = filter (is Super) places
     ,park  = filter (is Park ) places
@@ -263,13 +276,13 @@ structure Frame = struct
       {age = #age x
       ,gender = #gender x
       ,role   = #role x
-      ,belong = belong area (PERSON x) @ #belong x
+      ,belong = map clone_place_t (belong area (PERSON x) @ #belong x)
       ,visit  = #visit x
       ,dest   = #dest x
       ,health = #health x
       ,sched = #sched x
       }
-    fun asg (id, pop, places) =
+    fun asg (id, pop, places): area =
       (id, map ext pop, places)
   in
     Vector.map asg area
@@ -408,7 +421,11 @@ structure Frame = struct
       , visit  = visit
       , dest   = dest     
       , health = doTransit city (PERSON p)
-      }
+      } 
+      before
+        (if #place_k visit <> #place_k (#visit p) 
+             orelse #id visit <> #id (#visit p) then 
+          #tVis visit := time else ())
     fun trns() = movetrns {visit = #visit p, dest = #dest p}
     val myArea = #area_t (#visit p)
   in
@@ -495,7 +512,8 @@ structure Frame = struct
      {area = Vector.map (fn (id,persons,places) => 
           (id
           ,persons
-          , {sch   = Vector.map estTransitP (#sch   places)
+          , {cram  = Vector.map estTransitP (#cram  places)
+            ,sch   = Vector.map estTransitP (#sch   places)
             ,corp  = Vector.map estTransitP (#corp  places)
             ,park  = Vector.map estTransitP (#park  places)
             ,super = Vector.map estTransitP (#super places)
@@ -558,7 +576,7 @@ structure Probe = struct
   open EasyPrint
   structure T = TextIO
   infix 9 $
-  infix 1 <>
+  infix 1 @@
   fun isStat (h:health)(PERSON p:person) = 
     case (h,hd (#health p)) 
       of (SUS  ,SUS  ) => true
@@ -568,10 +586,10 @@ structure Probe = struct
        | (VAC _,VAC _) => true
        | _             => false
   fun reducePop ((_,ps,_):area) = 
-    {s = length o List.filter (isStat SUS    ) <> ps
-    ,e = length o List.filter (isStat (EXP 0)) <> ps
-    ,i = length o List.filter (isStat (INF 0)) <> ps
-    ,r = length o List.filter (isStat (REC 0)) <> ps
+    {s = length o List.filter (isStat SUS    ) @@ ps
+    ,e = length o List.filter (isStat (EXP 0)) @@ ps
+    ,i = length o List.filter (isStat (INF 0)) @@ ps
+    ,r = length o List.filter (isStat (REC 0)) @@ ps
     }
   fun reducePop' (city:city) = 
     Vector.map reducePop (#area city)
@@ -589,7 +607,8 @@ structure Probe = struct
   fun getPerson (city:city) (area_t:area_t) (idx:id) = 
     List.nth(#2 (#area city $ area_t), idx)
 
-  fun showPlace_k Sch   = "1"
+  fun showPlace_k Cram  = "0"
+    | showPlace_k Sch   = "1"
     | showPlace_k Corp  = "2"
     | showPlace_k Home  = "3"
     | showPlace_k Super = "4"
