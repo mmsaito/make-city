@@ -11,7 +11,6 @@ structure Trivial = struct
   open X_Misc;
   open Alice;
   open EasyPrint;
-  val rnd = Random.rand (0,1);
 
   (* モデル設定パラメータ:
     実装上の注意: 内容はtenativeかつadhocである。型を立てるのは、記述上の便宜のためであって、
@@ -72,6 +71,7 @@ structure Trivial = struct
   
   (* 会社員のスケジュール *)
   fun schedEmp (PERSON p, t:time): (time * place_t) list = let
+    val rnd = getrnd()
     val {day,weekday,hour,step} = timecomp t
     fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
     fun corp() = valOf (List.find (fn {place_k = Corp, ...} => true | _ => false) (#belong p))
@@ -97,6 +97,7 @@ structure Trivial = struct
 
   (* 学生のスケジュール *)
   fun schedStu (PERSON p, t:time): (time * place_t) list = let
+    val rnd = getrnd()
     val {day=day,weekday,hour,step} = timecomp t
     val today = day*days'
     fun home() = valOf (List.find (fn {place_k = Home, ...} => true | _ => false) (#belong p))
@@ -130,6 +131,7 @@ structure Trivial = struct
   end
 
   fun schedHaus (PERSON p, t:time): (time * place_t) list = let
+    val rnd = getrnd()
     (* 注意: 厳密には、区間演算をする必要があるが、面倒なのでさぼっている *)
     val {day=day,weekday,hour,step} = timecomp t
     val today = day*days'
@@ -174,6 +176,7 @@ structure Trivial = struct
 
   (* 人間生成ルール *)
   fun rulePerson id = let
+    val rnd = getrnd()
     val age    = Real.abs (30.0 + 30.0*rgauss rnd)
     val gender = rndSel rnd 0.5 (F,M)
     val (role,sched)   = 
@@ -189,23 +192,27 @@ structure Trivial = struct
   end
 
   (* 家族構成ルール *)
-  fun ruleHome () = 
-    List.tabulate (1 + iR (abs (2.0 * rgauss rnd)), fn _ => fn _ => true)
+  fun ruleHome () =  let val rnd = getrnd() in
+    List.tabulate (1 + iR (abs (2.0 * rgauss rnd)), fn _ => fn _ => true) end
 
   (* 公共空間生成ルール *)
-  fun rulePlace' size betaN place_t =
+  fun rulePlace' size betaN place_t = let
+    val rnd = getrnd()
+  in
     {id    = place_t 
     ,nVis  = zeroNVis ()
     ,pTrns = zeroPTrns ()
     ,size  = iR o abs @@ rI size + rI size*rgauss rnd
     ,betaN = abs (betaN + betaN*rgauss rnd)
     }: place
+  end
 
   fun rulePlace place_k size betaN area_t id = 
     rulePlace' size betaN {place_k = place_k, area_t = area_t, id = id, tVis = ref ~1}
 
   (* 行動範囲ルール *) 
   fun ruleVisit (areas: area vector)(PERSON p: person): place_t list = let
+    val rnd = getrnd()
     val i0 = areaPer (PERSON p)
     val (_,_,a0) = areas $ i0
     val (_,_,a') = rndSelV rnd areas
@@ -258,10 +265,13 @@ structure Trivial = struct
       ) 
   end
 
-  fun infect (conf:conf)(area:area) = 
+  fun infect (conf:conf)(area:area) = let
+    val rnd = getrnd()
+  in
     if (#1 area = JOJ) 
       then F.distInfect rnd area [(#e0_JOJ conf,EXP 0)]
       else area
+  end
 
   fun area (conf:conf) = 
     Vector.map (fn at => 
@@ -308,9 +318,9 @@ structure Trivial = struct
      多くなって手に負えなくなるので、label{X}{不完全なパラメータ}からconf型を完成される
      ルーチンを書いて、ref{X}を引数にとるようにせよ。
    *)
-  fun run1 conf recstep tStop file city = let
-    val () = writeConf conf ("conf_" ^ file ^ ".csv")
-    val os = T.openOut ("pop_" ^ file ^ ".csv")
+  fun run1 {conf, recstep, tStop, dir, tag, city} = let
+    val () = writeConf conf (dir^"/conf_"^ tag^".csv")
+    val os = T.openOut      (dir^"/pop_" ^ tag^".csv")
     val () = Probe.showPopTag os 5
     val nstep   = tStop div recstep
     fun step city = let

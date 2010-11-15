@@ -31,7 +31,6 @@ structure Type = struct
   val op $ = Vector.sub; infix 9 $;
   exception Undef;
   fun undef () = raise Undef;
-  type rnd = Random.rand;
   
   (* ============================================================== *)
   (* 差しあたって定数とするもの *)
@@ -186,6 +185,21 @@ structure Type = struct
        | Park  => (#park  o #3) (areas $ area_t) $ id
        | Super => (#super o #3) (areas $ area_t) $ id
        | Train => raise undef () (* unreachable *)
+
+  (* 乱数のシードの設定 *)
+  (* ここで設定するのは汚いが、延々と引数で引き回すのもあれなので、ここでやる *)
+  local
+    val rndref = ref NONE: Random.rand option ref
+  in
+    fun getrnd () =
+      case (!rndref)
+        of SOME r => r
+         | NONE   => (print "model1.sml:20: random number is not initialized!  Using default!"
+                     ;rndref := SOME (Random.rand (0,1))
+                     ;valOf(!rndref)
+                     )
+    fun inirnd n = rndref := SOME (Random.rand(0,n))
+  end
 end
 
 structure Frame = struct
@@ -381,8 +395,6 @@ structure Frame = struct
   
   (* ============================================================== *)
   (* シミュレーションエンジン *)
-  val rnd = Random.rand(0,1)
-
   val succTr = ref 0
   val failTr = ref 0
 
@@ -404,6 +416,7 @@ structure Frame = struct
 
   (* いま居る場所の感染効率から確率過程により健康状態を遷移させる *)
   fun doTransit ({area=areas,train,time}:city) (PERSON p: person): health list = let
+    val rnd = getrnd()
     val pTrns =
       case #visit p 
         of {place_k = Train, id, ...} => #pTrns (train $ id)
@@ -446,14 +459,7 @@ structure Frame = struct
             then (dst'    , sched)
             else (#visit p, (time',dst')::sched)
          | nil => (#visit p, nil)
-    fun newSched() = let
-      val aa = #mkSched p (PERSON p, time)
-    in
-      if time mod days' = 0 andalso null aa then
-        (print ("fanny empty!!, role = " ^ Int.toString (Unsafe.cast (#role p): int) ^ "\n"); aa)
-      else
-        aa
-    end
+    fun newSched() = #mkSched p (PERSON p, time)
   in
     case #dest p
       of NONE => 

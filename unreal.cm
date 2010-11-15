@@ -1,6 +1,7 @@
 (* ‘Sƒ‰ƒCƒuƒ‰ƒŠ‚Ì“Ç‚İ‚İ (.cm ”Å) *)
 Library
-    library (/home/saitohm/Documents/Code/sml-toy/import-all.cm)
+    library (/Users/Administrator/Documents/Code/sml-toy/import-all.cm)
+    library (/Users/Administrator/Documents/Code/sml-toy/mpi/mpi.cm)
     structure X_Misc
     structure Type
     structure Frame
@@ -9,8 +10,10 @@ Library
 is
     $/basis.cm
     $/smlnj-lib.cm
+    $smlnj/cm.cm
     $c/c.cm
-    /home/saitohm/Documents/Code/sml-toy/import-all.cm
+    /Users/Administrator/Documents/Code/sml-toy/import-all.cm
+    /Users/Administrator/Documents/Code/sml-toy/mpi/mpi.cm
     x_misc.sml
     unreal.sml
     model1.sml
