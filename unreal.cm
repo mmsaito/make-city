@@ -1,25 +1,23 @@
 (* ‘Sƒ‰ƒCƒuƒ‰ƒŠ‚Ì“Ç‚İ‚İ (.cm ”Å) *)
 Library
-    library (/Users/Administrator/Documents/Code/sml-toy/import-all.cm)
-    library (/Users/Administrator/Documents/Code/sml-toy/mpi/mpi.cm)
+    library ($mylib/import-all.cm)
+    library ($mpi/mpi.cm)
     structure X_Misc
     structure Type
     structure Frame
     structure Trivial
     structure Probe
-
-    structure JCL1
     structure GenTask
+    structure JCL1
 is
     $/basis.cm
     $/smlnj-lib.cm
     $smlnj/cm.cm
     $c/c.cm
-    /Users/Administrator/Documents/Code/sml-toy/import-all.cm
-    /Users/Administrator/Documents/Code/sml-toy/mpi/mpi.cm
+    $mylib/import-all.cm
+    $mpi/mpi.cm
     x_misc.sml
     unreal.sml
     model1.sml
-    gentask.sml
-
     jcl1.sml
+    gentask.sml

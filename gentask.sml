@@ -10,7 +10,7 @@ structure GenTask = struct
     ,betaNTrain = p4  * gamma
     ,e0_JOJ     = 30
     ,nPop       = 3000
-    ,tag  = String.concatWith "_" (map Alice.sR [p1,p2,p3,p4])
+    ,tag  = String.concatWith "_" (map Real.toString [p1,p2,p3,p4])
     ,mcid = let open StringCvt in padLeft #"0" 3 (Int.fmt DEC mcid) end
     }
     | setConf _ = (print "# of elements don't agree!, Isn't is bug?\n"; raise Bind)
