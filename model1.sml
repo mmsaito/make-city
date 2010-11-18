@@ -25,6 +25,8 @@ structure Trivial = struct
     ,betaNTrain: real
     ,e0_JOJ    : int
     ,nPop      : int (* ひとつの街の人口。後で配列にする *)
+    ,tag       : string
+    ,mcid      : string
     }
   (* 設定例 *)
   val conf0: conf =
@@ -36,6 +38,8 @@ structure Trivial = struct
     ,betaNPark  = 0.5 * gamma
     ,e0_JOJ     = 30
     ,nPop       = 3000
+    ,tag        = "sample"
+    ,mcid       = ""
     }
 
   (* テストデータ *)

@@ -7,6 +7,9 @@ Library
     structure Frame
     structure Trivial
     structure Probe
+
+    structure JCL1
+    structure GenTask
 is
     $/basis.cm
     $/smlnj-lib.cm
@@ -17,3 +20,6 @@ is
     x_misc.sml
     unreal.sml
     model1.sml
+    gentask.sml
+
+    jcl1.sml
