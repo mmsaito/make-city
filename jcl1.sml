@@ -15,7 +15,8 @@ val me    = MPI.comm_rank();
 (* 担当タスクの決定 *)
 val outbase = "test"
 val idxTask = Int32.toInt (me + offset)
-val tasks = GenTask.gen2 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], nDup = 8}
+(* val tasks = GenTask.gen2 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], nDup = 8} *)
+val tasks = GenTask.gen2 {setO = [1.21], setTr = [1.81], nDup = 8}
 val nTasks = length tasks
 
 val _ = 
@@ -35,7 +36,7 @@ val _ =
       val _ = Trivial.inirnd 0;
       val city = Trivial.city conf;
 
-      val tStop = 360*Type.days';
+      val tStop = Type.days';
 
       (* シミュレーション中はランク毎に違う乱数列を使う *)
       val _ = Trivial.inirnd idxTask

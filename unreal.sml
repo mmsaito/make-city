@@ -415,7 +415,7 @@ structure Frame = struct
        | NONE   => NONE   before failTr := !failTr + 1
 
   (* いま居る場所の感染効率から確率過程により健康状態を遷移させる *)
-  fun doTransit ({area=areas,train,time}:city) (PERSON p: person): health list = let
+  fun updateHealth ({area=areas,train,time}:city) (PERSON p: person): health list = let
     val rnd = getrnd()
     val pTrns =
       case #visit p 
@@ -445,7 +445,7 @@ structure Frame = struct
       , sched  = sched
       , visit  = visit
       , dest   = dest     
-      , health = doTransit city (PERSON p)
+      , health = updateHealth city (PERSON p)
       } 
       before
         (if #place_k visit <> #place_k (#visit p) 
@@ -472,10 +472,9 @@ structure Frame = struct
        | SOME dest =>
           (* 乗れる電車があれば乗る。そして、目的地でおりる *)
           if (#place_k (#visit p) = Train) then 
-            if (#area_t (#id (train $ #id (#visit p))) = #area_t dest) then
-              update {visit = dest, dest = NONE, sched = newSched()}
-            else
-              update {visit = #visit p, dest = #dest p, sched = newSched()}
+            if (#area_t (#id (train $ #id (#visit p))) = #area_t dest) 
+              then update {visit = dest    , dest = NONE   , sched = newSched()}
+              else update {visit = #visit p, dest = #dest p, sched = newSched()}
           else (case catchTrain (train, time, myArea, #area_t dest)
             of SOME tr => update {visit = #id tr  , dest = SOME dest, sched = newSched()}
              | NONE    => update {visit = #visit p, dest = #dest p  , sched = newSched()}
