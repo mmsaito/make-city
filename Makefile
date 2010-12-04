@@ -1,8 +1,12 @@
 #(make 2>&1) > err
 FC = ifort
-OPT = /Qopenmp
+OPT = /Qopenmp /Zi /check /traceback 
 
-all: unreal.obj
+all: jcl_sh1.exe
+
+OBJ1 = unreal.obj model1.obj jcl_sh1.obj
+jcl_sh1.exe: $(OBJ1)
+	$(FC) $(OBJ1) /exe:$@
 
 .SUFFIXES: 
 .SUFFIXES: .f90 .obj
@@ -13,3 +17,5 @@ all: unreal.obj
 
 argtest:
 	echoarg /C /B /D /E c:\hoge
+clean:
+	rm *.obj *.exe

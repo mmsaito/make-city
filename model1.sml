@@ -124,11 +124,20 @@ structure Trivial = struct
         (* ダブルブッキングが生じ得るが...どうしようか *)
         Misc.qsortL (fn ((t,_),(t',_)) => Int.compare(t,t')) (
           (today + 18*hours', home()) ::
+          List.tabulate
+            (irndIn rnd (1,length (#belong p))
+            , fn _ => 
+              (today + irndIn rnd (10*hours',18*hours')
+              ,List.nth(#belong p, irndIn rnd (0, length(#belong p)))
+              )
+            )
+(* でたらめぶりは、上のように改定したもののほうが望ましかろう
           ListPair.zip
             ( List.tabulate
                ( irndIn rnd (1,length (#belong p))
                , fn _ => today + irndIn rnd (10*hours',18*hours'))
             , #belong p)
+*)
         )
     else
       #sched p
@@ -165,7 +174,7 @@ structure Trivial = struct
           let val (tb,te,p) = x
               val (tb',te',p') = x'
           in
-             if tb < tb' 
+             if tb + 2*hours' < tb' 
                then (tb,p)::(te,home)::connect (x'::xs) 
                else (tb,p)           ::connect (x'::xs)
           end
@@ -207,7 +216,7 @@ structure Trivial = struct
     ,nVis  = zeroNVis ()
     ,pTrns = zeroPTrns ()
     ,size  = iR o abs @@ rI size + rI size*rgauss rnd
-    ,betaN = abs (betaN + betaN*rgauss rnd)
+    ,betaN = abs (betaN + 0.1*betaN*rgauss rnd)
     }: place
   end
 
@@ -250,8 +259,11 @@ structure Trivial = struct
 
   (* ====================================================================  *)
   (* 上記ルールによる都市の組み立て *)
-  fun perHome (conf:conf) at = 
-    F.makeHome at (#betaNHome conf) (F.makePerson (#nPop conf) rulePerson) ruleHome
+  fun perHome (conf:conf) at = let
+    val betaN = fn () => abs (#betaNHome conf*(1.0 + 0.1*rgauss (getrnd())))
+  in
+    F.makeHome at betaN (F.makePerson (#nPop conf) rulePerson) ruleHome
+  end
 
   fun place (conf:conf) at home = let
     infixr 2 `::
@@ -260,7 +272,7 @@ structure Trivial = struct
   in
     F.makePlace at home (
         (at = SJK orelse at = TAC, 
-          ( 1, rulePlace Cram 100 (#betaNSch   conf)) )`::
+         ( 1, rulePlace Cram 100 (#betaNSch   conf)) )`::
         [(10, rulePlace Sch  100 (#betaNSch   conf))
         ,(10, rulePlace Super 20 (#betaNSuper conf))
         ,(19, rulePlace Corp  15 (#betaNCorp  conf))
@@ -292,6 +304,100 @@ structure Trivial = struct
       ,train = train conf
       ,time = 0
       }
+  
+  (* 印字機 *)
+  fun showRole Employed = "Employed" 
+    | showRole Hausfrau = "Hausfrau" 
+    | showRole Student  = "Student" 
+
+  fun showHealth SUS        = "SUS," ^ "0" (* dummy *)
+    | showHealth (EXP time) = "EXP," ^ sI time
+    | showHealth (INF time) = "INF," ^ sI time
+    | showHealth (VAC time) = "VAC," ^ sI time   
+    | showHealth (REC time) = "REC," ^ sI time
+
+  fun showPlace_k' Cram  = "Cram"
+    | showPlace_k' Sch   = "Sch"
+    | showPlace_k' Corp  = "Corp"
+    | showPlace_k' Home  = "Home"
+    | showPlace_k' Super = "Super"
+    | showPlace_k' Park  = "Park"
+    | showPlace_k' Train = "Train"
+
+  fun showPlace_t' ({area_t, place_k, id, ...}: place_t) =
+    String.concat [sI area_t,",", showPlace_k' place_k,",", sI id]
+
+  fun writeCity (city:city) (f:string) = let
+    val os = TextIO.openOut f
+    fun w s = TextIO.output(os, s)
+    fun w' s = (w s; w "\n")
+    fun w_ s = (w s; w ",")
+
+    val w_place_t = w' o showPlace_t' 
+
+    fun w_person (PERSON {role, belong, visit, dest, health, ...}) = 
+      (w' (showRole role) 
+      ;w' "belong:"; w (sI o length @@ belong); w' ",length"
+      ;app w_place_t belong
+      ;w' "health:"
+      ;w' (showHealth (hd health))
+      )
+
+    fun w_place (pl: place) = 
+      (w_place_t (#id pl)
+      ;w' "betaN:"
+      ;w' (sR (#betaN pl))
+      )
+
+    fun w_place_group({cram,sch,corp,park,super,home}:places) =
+      (w' (showPlace_k' Cram); w (sI o Vector.length @@ cram); w' ",length"
+      ;Vector.app w_place cram
+
+      ;w' (showPlace_k' Sch); w (sI o Vector.length @@ sch) ; w' ",length"
+      ;Vector.app w_place sch
+
+      ;w' (showPlace_k' Corp); w (sI o Vector.length @@ corp); w' ",length" 
+      ;Vector.app w_place corp
+
+      ;w' (showPlace_k' Park); w (sI o Vector.length @@ park); w' ",length" 
+      ;Vector.app w_place park
+
+      ;w' (showPlace_k' Super); w (sI o Vector.length @@ super); w' ",length" 
+      ;Vector.app w_place super
+
+      ;w' (showPlace_k' Home); w (sI o Vector.length @@ home); w' ",length" 
+      ;Vector.app w_place home
+      )
+
+    fun w_train({id: place_t, nVis: nVis, size: size, betaN: real, pTrns:pTrns
+               ,iSked: int, sked: {time:time, area_t:area_t} vector}:mobil) =
+      (w_place_t id
+      ;w' "betaN:"
+      ;w' (sR betaN)
+      ;w (sI (Vector.length sked)); w' (",length")
+      ;w' "sked:"
+      ;Vector.app (fn {time,area_t} => (w (sI time); w ","; w' (sI area_t))) sked
+      )
+
+    fun w_area(area:area) =
+     (w' (sI (#1 area) ^ ", id" ) (* id *)
+     ;w' "person:"; w' (sI (length (#2 area)))
+     ;List.app w_person (#2 area)
+     ;w' "place-group:"; w (sI 6); w' ",length" (* type places *)
+     ;w_place_group (#3 area)
+     )
+    fun w_time(time:time) = w' (sI time)
+  in
+    (w' "area:"; w (sI (Vector.length (#area city))); w' ",length"
+    ;Vector.app w_area (#area city)
+    ;w' "train:"; w' (sI (Vector.length (#train city)))
+    ;Vector.app w_train (#train city)
+    ;w' "time:"
+    ;w(sI (#time city)^"\n")
+    ;TextIO.closeOut os
+    )
+  end
+
 
   (* 3000人 、1日で、45[sec] 
      150万人、1日で、6.25[時間]    (実スケール)

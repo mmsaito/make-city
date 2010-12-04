@@ -1,4 +1,16 @@
 module X_Misc
+  implicit none
+contains
+! 乱数
+  real(8) function rndIn (x,y)
+    real(8) :: x, y, r
+    call random_number(r) ! r in [0,1)
+    rndIn = x + r *  (y - x)  
+  end function
+  integer function irndIn (i, j)
+    integer :: i, j
+    irndIn = int(rndIn(dble(i),dble(j)))
+  end function
 end module
 
 module Frame
@@ -33,7 +45,6 @@ module Frame
   integer, parameter :: HL_MAX = HL_REC
 
   ! place_k型定数
-  integer, parameter :: PL_MIN   = 1
   integer, parameter :: PL_CRAM  = 1
   integer, parameter :: PL_SCH   = 2
   integer, parameter :: PL_CORP  = 3
@@ -88,9 +99,14 @@ module Frame
     type(mob_sched), allocatable, dimension(:) :: sked
   end type
 
+  !person%role 定数
+  integer, parameter :: Employed = 1
+  integer, parameter :: Hausfrau = 2
+  integer, parameter :: Student  = 3
+
   type person
     integer :: age, gender, role
-    type(place_t), allocatable, dimension(:) :: place_t
+    type(place_t), allocatable, dimension(:) :: belong
     type(place_t) :: visit
     type(place_t_option) :: dest
     ! 注. MLでは place_t option型
@@ -140,10 +156,11 @@ contains
   !   person_: 対象の人の人間
   !   time   : 現在時刻
   ! 出力: 
-  !   person%sched: スケジュール
-  subroutine scheduler_t(person_, time)
+  !   sched_: スケジュール
+  subroutine scheduler_t(person_, time, sched_)
     class(person) :: person_ ! type(person)ではNG
     integer       :: time
+    type(sched)   :: sched_
   end subroutine
 
   integer function catchTrain(trains, now, src, dst) result (i)
@@ -210,7 +227,7 @@ contains
     type(person), intent(inout) :: p
     type(place_t) :: dest
     integer :: idxTr
-    call p%mkSched(city_%time)
+    call p%mkSched(city_%time, p%sched)
     if (p%dest%kind .eq. NONE) then
       dest = consumeSched()
       if (p%dest%o%area_t .eq. p%visit%area_t) then
@@ -378,5 +395,50 @@ contains
     !$omp barrier
     call evalPlace(city_) 
     !$omp barrier
+  end subroutine
+end module
+
+module Record
+  use Frame
+contains
+  type(nVis) function reducePop1 (area_) result (it)
+    type(area) :: area_
+    integer :: i
+    it%s = 0
+    it%e = 0
+    it%i = 0
+    it%r = 0
+    do i = 1, size(area_%person)
+      select case (area_%person(i)%health(area_%person(i)%nHealth)%kind)
+      case (HL_SUS); it%s = it%s + 1
+      case (HL_EXP); it%e = it%e + 1
+      case (HL_INF); it%i = it%i + 1
+      case (HL_REC); it%r = it%r + 1
+      end select
+    end do
+  end function
+  function reducePop(city_) result (it)
+    type(city) :: city_
+    type(nVis) :: it(size(city_%area))
+    integer    :: i
+    do i = 1, size(it)
+      it(i) = reducePop1(city_%area(i))
+    end do
+  end function
+  subroutine  showPopTag(os, n)
+    integer :: os, n
+    do i = 1, n
+      write(*,*) "s,e,i,r"
+    end do
+  end subroutine
+
+  subroutine  showPop(os, t, pop)
+    integer    :: os, t
+    type(nVis) :: pop(:)
+    write(os,'(I8,",")') t
+    do i = 1, size(pop)
+      write(os,'(4(I6,","),$)') pop(i)%s, pop(i)%e, pop(i)%i, pop(i)%r
+    end do
+    write(os,*)
   end subroutine
 end module

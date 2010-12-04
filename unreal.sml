@@ -215,7 +215,7 @@ structure Frame = struct
 
   (* 2. ‰Æ‘°\¬ *)
   fun makeHome (area_t: area_t)
-               (betaN : real)
+               (betaN : unit -> real) (* ƒ‰ƒ“ƒ_ƒ€‰»‚ð‹–‚·‚½‚ß *)
                (persons:per2 list)
                (rule: unit -> (per2 -> bool) list)
                :person list * place vector = 
@@ -241,7 +241,7 @@ structure Frame = struct
         ,nVis  = zeroNVis()
         ,pTrns = zeroPTrns()
         ,size  = length ps
-        ,betaN = betaN
+        ,betaN = betaN ()
         }
       val ps: person list = 
         map (fn p => PERSON
@@ -647,5 +647,3 @@ structure Probe = struct
   fun showPlace_t ({area_t,id,place_k,...}:place_t) = 
     fI area_t ^ "," ^ fI id ^ "," ^ showPlace_k place_k ^ ","
 end
-
-
