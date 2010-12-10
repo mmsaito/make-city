@@ -77,6 +77,7 @@ contains
     call readArea(city_%area)
     call readTrain(city_%train)
     call readTime(city_%time)
+    close(ist)
   contains
     subroutine check(get,rule)
       character(*) :: get, rule
@@ -88,12 +89,16 @@ contains
     subroutine readPlace_t(id)
       type(place_t) :: id
       read(ist,*) id%area_t, temp, id%id
+      call fromBase0(id%area_t)
       id%place_k = place_kFromString(temp)
+      call fromBase0(id%id)
+      id%tVis = 0
     end subroutine 
-    subroutine readHealth(h)
-      type(health) :: h
-      read(ist,*,err=999) temp, h%time
-      h%kind = healthFromString(temp)
+    subroutine readHealth(p)
+      type(person), target :: p
+      read(ist,*,err=999) temp, p%health(1)%time
+      p%health(1)%kind = healthFromString(temp)
+      p%nHealth = 1
       return
   999 read(ist,*) temp
       write(*,*) 'parse error in readHealth: ', trim(temp)
@@ -116,8 +121,11 @@ contains
         do j = 1, m
           call readPlace_t(p(i)%belong(j))
         end do
+        p(i)%visit = findBelong(p(i)%belong, PL_HOME) 
+        p(i)%dest%kind = NONE
         read(ist,*) temp; call check(temp,'health:')
-        call readHealth(p(i)%health(1))
+        call readHealth(p(i))
+        p(i)%sched%n = 0
       end do
     end subroutine
     subroutine readPlace(pl)
@@ -133,9 +141,9 @@ contains
       read(ist,*) n; allocate(pl(n))
       do i = 1, n
         read(ist,*) temp; idx = place_kFromString(temp)
-        read(ist,*) m; allocate(pl(i)%o(m))
+        read(ist,*) m; allocate(pl(idx)%o(m))
         do j = 1, m
-          call readPlace(pl(i)%o(j))
+          call readPlace(pl(idx)%o(j))
         end do
       end do
     end subroutine
@@ -166,6 +174,7 @@ contains
       read(ist,*) temp; call check(temp,'sked:')
       do i = 1, n
         read(ist,*) sch(i)%time, sch(i)%area_t
+        call fromBase0(sch(i)%area_t)
       end do
     end subroutine
     subroutine readTrain(tr)
@@ -175,8 +184,9 @@ contains
       read(ist,*) n; allocate(tr(n))
       do i = 1, n
         call readPlace(tr(i)%pl)
-        tr(i)%iSked = 0
+        tr(i)%iSked = 1
         call readMobSched(tr(i)%sked)
+        tr(i)%onService = .true.
       end do
     end subroutine
   end subroutine
@@ -204,19 +214,6 @@ contains
     end do
   end subroutine
 
-  type(place_t) function findBelong(xs,kind,doesMatch) result (it)
-    type(place_t) :: xs(:)
-    integer :: i, kind
-    logical, optional :: doesMatch
-    do i = 1, size(xs) 
-      if (xs(i)%place_k .eq. kind) then
-        it = xs(i)
-        if (present(doesMatch)) doesMatch = .true.
-        return
-      end if
-    end do
-    if (present(doesMatch)) doesMatch = .false.
-  end function
 
   integer(2) function int_comp(i,j)
     integer :: i, j
@@ -273,14 +270,14 @@ contains
       if (1 .le. tm%weekday .and. tm%weekday .le. 5) then
         sch%n = 2
         sch%time   (1) = today + irndIn ( 6*ihours, 8*ihours)
-        sch%place_t(1) = findBelong(p%belong, PL_CORP)
+        sch%place_t(1) = findBelong(p%belong, PL_SCH)
         sch%time   (2) = today + irndIn (16*ihours,19*ihours)
         sch%place_t(2) = findBelong(p%belong, PL_HOME)
         ignore = findBelong(p%belong, PL_CRAM, exists)
         if (exists) then
           sch%n = sch%n + 2
           sch%time   (3) = today + irndIn (19*ihours, 20*ihours)
-          sch%place_t(3) = findBelong(p%belong, PL_CORP)
+          sch%place_t(3) = findBelong(p%belong, PL_SCH)
           sch%time   (4) = today + irndIn (21*ihours, 22*ihours)
           sch%place_t(4) = findBelong(p%belong, PL_HOME)
         end if
@@ -364,8 +361,6 @@ contains
         schedO(i)%place_t = p%belong(idx(irndIn (1,nOthers+1)))
       end do
 
-      write(*,*) 'sizeof = ', sizeof_sched2()
-      write(*,*) 'nItems = ', size(schedO)
       call qsort(schedO, size(schedO), sizeof_sched2(), sched2_comp)
 
       !(* 3. èÍèäñàÇÃëÿç›éûçèÇÃä‘äuÇ©ÇÁó∑íˆÇòAåãÇ∑ÇÈ *)
@@ -412,7 +407,8 @@ contains
 
   subroutine run1 (recstep, tStop, dir, tag, city_)
     use Record
-    integer :: recstep, tStop, nstep, i, j
+    !$ use omp_lib
+    integer :: recstep, tStop, nstep, i, j, k
     character(*) :: dir, tag
     type(city) :: city_
     integer, parameter :: os = 2333
@@ -422,12 +418,38 @@ contains
     open(os, file=dir//"/pop_"//tag//".csv")
     call showPopTag(os, 5)
     nstep   = tStop / recstep
+
+    !$omp parallel
+
+    !$omp master
+    !$  write(*,*) omp_get_num_threads(), 'threads are running.'
+    !$omp end master
+
     do i = 1, nstep
       do j = 1, recstep
         call advanceTime(city_)
       end do
+     
+        !$omp barrier
+        !$omp master
+!        write(*,*) 'id = ', omp_get_thread_num(), 'time = ', city_%time, ', counter = ', i
+        !$omp end master
+
+!      write(*,'(I5,10I2,","10I5)') city_%time, &
+!       (city_%area(1)%person(k)%visit%place_k, k = 1, 10), &
+!       (city_%area(1)%person(k)%sched%time(1), k = 1, 10)
+
+      !$omp master
       pop = reducePop(city_)
       call showPop(os, city_%time, pop)
+      !$omp end master
     end do
+
+    !$omp barrier
+    write(*,*) 'Done', i, city_%time
+    !$omp barrier
+
+    !$omp end parallel
+
   end subroutine
 end module

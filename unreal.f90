@@ -15,17 +15,18 @@ end module
 
 module Frame
 !  use X_Misc
+!$ use omp_lib
   implicit none
-  integer, parameter :: alpha = 1d0/3.5d0
-  integer, parameter :: gamma = 1d0/3.0d0
+  real(8), parameter :: alpha = 1d0/3.5d0
+  real(8), parameter :: gamma = 1d0/3.0d0
 
-  real(8), parameter :: dt = 1.0/1440.0 
+  real(8), parameter :: dt = 1d0/1440d0 
   integer, parameter :: steps_per_day = nint(1.0/dt)
 
   ! 時間の単位 (in steps)
-  real(8), parameter :: days    = 1.0/dt
-  real(8), parameter :: hours   = 1.0/24.0/dt
-  real(8), parameter :: minutes = 1.0/24.0/60.0/dt
+  real(8), parameter :: days    = 1d0/dt
+  real(8), parameter :: hours   = 1d0/24d0/dt
+  real(8), parameter :: minutes = 1d0/24d0/60d0/dt
   
   integer, parameter :: idays   = nint(days)
   integer, parameter :: ihours  = nint(hours)
@@ -55,11 +56,11 @@ module Frame
   integer, parameter :: PL_MAX   = PL_TRAIN
 
   type place_t
-    integer :: place_k, area_t, id
+    integer :: area_t, place_k, id
     integer :: tVis !使わないかもしれない
   end type
 
-  integer, parameter :: NONE = 1
+  integer, parameter :: NONE = 0
   integer, parameter :: SOME = 1
   type place_t_option
     integer       :: kind
@@ -86,7 +87,7 @@ module Frame
     integer :: time, area_t
   end type
 
-  integer, parameter :: SCHED_MAX = 10
+  integer, parameter :: SCHED_MAX = 20
   type sched
     integer :: n
     integer, dimension(SCHED_MAX) :: time
@@ -97,6 +98,7 @@ module Frame
     type(place)     :: pl
     integer         :: iSked
     type(mob_sched), allocatable, dimension(:) :: sked
+    logical         :: onService
   end type
 
   !person%role 定数
@@ -163,14 +165,37 @@ contains
     type(sched)   :: sched_
   end subroutine
 
+  ! person%belongからカテゴリに一致するものを探す
+  type(place_t) function findBelong(xs,kind,doesMatch) result (it)
+    type(place_t) :: xs(:)
+    integer :: i, kind
+    logical, optional :: doesMatch
+    do i = 1, size(xs) 
+      if (xs(i)%place_k .eq. kind) then
+        it = xs(i)
+        if (present(doesMatch)) doesMatch = .true.
+        return
+      end if
+    end do
+    if (present(doesMatch)) then
+      doesMatch = .false.
+    else
+      write(*,*) 'runtime error: cant find ', kind
+      stop
+    end if
+  end function
+
+  ! ToDo: 非常に非効率的。かしこいアルゴにせよ。ex.bsearch
   integer function catchTrain(trains, now, src, dst) result (i)
     type(mobil) :: trains(:)
     integer     :: now, src, dst
     integer     :: step
     step = modulo(now, steps_per_day)
     do i = 1, size(trains)
-      if (exists(matchSrc, trains(i)%sked) .and. &
-          exists(matchDst, trains(i)%sked)) return
+      if (.not. trains(i)%onService) cycle
+      if (.not. exists(matchSrc, trains(i)%sked)) cycle
+      if (.not. exists(matchDst, trains(i)%sked)) cycle
+      return
     end do
     i = 0
     return
@@ -183,12 +208,22 @@ contains
       type(mob_sched) :: sked
       f = sked%time .ge. step .and. sked%area_t .eq. dst
     end function
-    logical recursive function exists(f,sked) result (ans)
+!    logical recursive function exists(f,sked) result (ans)
+!      type(mob_sched) :: sked(:)
+!      logical, external :: f
+!      ans = f(sked(1)) 
+!      if (size(sked).eq.1) return
+!      ans = ans .or. exists(f,sked(2:))
+!    end function
+    logical function exists(f,sked) result (ans)
       type(mob_sched) :: sked(:)
       logical, external :: f
-      ans = f(sked(1)) 
-      if (size(sked).eq.1) return
-      ans = ans .or. exists(f,sked(2:))
+      integer :: i
+      ans = .false.
+      do i = 1, size(sked)
+        ans = f(sked(i))
+        if (ans) return  
+      end do
     end function
   end function
 
@@ -203,6 +238,10 @@ contains
       pTrns => city_%area(p%visit%area_t)%place(p%visit%place_k)%o(p%visit%id)%pTrns
     end if
 
+    !if (pTrns%s2e .gt. 0) write(*,*) pTrns%s2e 
+    !if (pTrns%e2i .gt. 0) write(*,*) pTrns%e2i
+
+    call random_number(rnd)
     select case (p%health(p%nHealth)%kind)
     case (HL_SUS)
       if (rnd .lt. pTrns%s2e) then
@@ -225,37 +264,47 @@ contains
   subroutine evalPerson(city_, p)
     type(city), intent(inout) :: city_
     type(person), intent(inout) :: p
-    type(place_t) :: dest
+    type(place_t) :: dest, tmp
     integer :: idxTr
+
     call p%mkSched(city_%time, p%sched)
     if (p%dest%kind .eq. NONE) then
       dest = consumeSched()
-      if (p%dest%o%area_t .eq. p%visit%area_t) then
-        p%visit = dest
+      if (dest%area_t .eq. p%visit%area_t) then
+        p%visit     = dest
+        p%dest%kind = NONE
       else
         p%dest%kind = SOME
         p%dest%o    = dest
       end if
-    else !if (p%dest%kind .eq. SOME) then
+    else if (p%dest%kind .eq. SOME) then
       if (p%visit%place_k .eq. PL_TRAIN) then 
+        ! !$omp critical
         if (city_%train(p%visit%id)%pl%id%area_t .eq. p%dest%o%area_t) then
-          p%visit     = dest
+          p%visit     = p%dest%o
           p%dest%kind = NONE
         endif
+        ! !$omp end critical
       else
+        ! !$omp critical
         idxTr = catchTrain(city_%train, city_%time, p%visit%area_t, p%dest%o%area_t)
         if (idxTr .ge. 1) then
           p%visit = city_%train(idxTr)%pl%id
         end if
+        ! !$omp end critical
       endif
+    else
+      write(*,*) 'runtime error: bad option kind = ', p%dest%kind, SOME, NONE
+      stop
     endif
     call updateHealth(city_,p)
   contains
     function consumeSched() result (dest)
       type(place_t) :: dest
-      integer :: n
       if (p%sched%n .ge. 1 .and. city_%time .ge. p%sched%time(1)) then
           dest = p%sched%place_t(1)
+          !Here I make a bug to forget shift ..%time. SoA is bad!! use AoS!!
+          p%sched%time(1:p%sched%n - 1)    = p%sched%time(2:p%sched%n)
           p%sched%place_t(1:p%sched%n - 1) = p%sched%place_t(2:p%sched%n)
           p%sched%n = p%sched%n - 1
       else
@@ -272,8 +321,13 @@ contains
     sch => tr%sked(tr%iSked)
     time_today = modulo(city_%time, steps_per_day)
     if (time_today .eq. sch%time) then
+      tr%onService    = .true.
       tr%pl%id%area_t = sch%area_t 
-      tr%iSked        = modulo(tr%iSked + 1, size(tr%sked))
+      tr%iSked        = tr%iSked + 1
+      if (tr%iSked .gt.  size(tr%sked)) then
+        tr%onService = .false.
+        tr%iSked = 1
+      end if
     end if
   end subroutine 
 
@@ -284,8 +338,9 @@ contains
     real(8) :: s, e, i, r, v, n, beta
     type(place), pointer :: p
     !$omp do private (k)
+    
     do j = 1, size(city_%area)
-      do k = 1, PL_MAX
+      do k = 1, size(city_%area(j)%place)
         do l = 1, size(city_%area(j)%place(k)%o)
           p => city_%area(j)%place(k)%o(l)
           s = p%nVis%s
@@ -325,10 +380,23 @@ contains
   !  - それに応じて、次のステップで使う(健康状態の)遷移確率を計算する。
   subroutine evalPlace(city_) 
     type(city), target :: city_
-    integer :: i
+    integer :: i, j, k
+    !$omp do private(j,k)
+    do i = 1, size(city_%area)
+      do j = 1, size(city_%area(i)%place)
+        do k = 1, size(city_%area(i)%place(j)%o)
+          city_%area(i)%place(j)%o(k)%nVis = nVis(0, 0, 0, 0, 0)
+        end do
+      end do
+    end do
+    !$omp end do
+    !$omp barrier
+
     !$omp do
     do i = 1, size(city_%area)
-      call cntPersons(city_%area(i))
+      do k = 1, size(city_%area(i)%person)
+        call addVis(city_%area(i)%person(k))
+      end do
     end do
     !$omp end do
     call estTransit(city_)
@@ -368,32 +436,35 @@ contains
       type(area) :: area_
       integer    :: i, j, k
 
-      do i = 1, PL_MAX
-        do k = 1, size(area_%place(i)%o)
-          area_%place(i)%o(k)%nVis = nVis(0, 0, 0, 0, 0)
-        end do
-      end do
-      !$omp barrier
-
-      do k = 1, size(area_%person)
-        call addVis(area_%person(k))
-      end do
     end subroutine
   end subroutine
 
   subroutine advanceTime(city_)
     type(city) :: city_
-    integer :: i, j
+    integer :: i, j, k
+
+    !$omp barrier
     !$omp do private(j)
-    do i=1, size(city_%area) 
-      do j=1, size(city_%area(i)%person)
+    do i = 1, size(city_%area) 
+      do j = 1, size(city_%area(i)%person)
         call evalPerson(city_, city_%area(i)%person(j))
       end do
     end do
     !$omp end do
-
     !$omp barrier
-    call evalPlace(city_) 
+
+    !$omp master
+    city_%time = city_%time + 1
+    !$omp end master
+    !$omp barrier
+    !$omp flush
+
+    !$omp do 
+      do i = 1, size(city_%train)
+        call evalTrain (city_, city_%train(i))
+      end do
+    !$omp end do
+    call evalPlace(city_)
     !$omp barrier
   end subroutine
 end module
@@ -427,15 +498,17 @@ contains
   end function
   subroutine  showPopTag(os, n)
     integer :: os, n
+    write(os,'("t,",$)')
     do i = 1, n
-      write(*,*) "s,e,i,r"
+      write(os,'("s,e,i,r,",$)')
     end do
+    write(os,*)
   end subroutine
 
   subroutine  showPop(os, t, pop)
     integer    :: os, t
     type(nVis) :: pop(:)
-    write(os,'(I8,",")') t
+    write(os,'(I8,",",$)') t
     do i = 1, size(pop)
       write(os,'(4(I6,","),$)') pop(i)%s, pop(i)%e, pop(i)%i, pop(i)%r
     end do
