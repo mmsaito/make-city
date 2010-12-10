@@ -1,6 +1,7 @@
 #(make 2>&1) > err
 FC = ifort
-OPT = /Qopenmp /Zi /check /traceback 
+#OPT = /Qopenmp /Zi /check /traceback /Od
+OPT = /Qopenmp /check
 
 all: jcl_sh1.exe
 
@@ -18,4 +19,4 @@ jcl_sh1.exe: $(OBJ1)
 argtest:
 	echoarg /C /B /D /E c:\hoge
 clean:
-	rm *.obj *.exe
+	rm *.obj *.exe *.mod
