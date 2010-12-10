@@ -22,7 +22,12 @@ structure GenTask = struct
     | enumHP (set, m) = 
     map (fn rest => hd set :: rest) (enumHP (set, m - 1)) @
     enumHP (tl set, m)
- 
+
+  (* デカルト積 *)
+  fun prodSet (xs::xss) = 
+    List.concat (map (fn x => map (fn ys => x :: ys) (prodSet xss)) xs)
+    | prodSet nil = [nil]
+
   (* モンテカルロの分だけ複製する *)
   fun dup (xs,n) = let
     fun dd 0 x = nil
@@ -52,5 +57,14 @@ structure GenTask = struct
     val ys = List.concat (map (fn z => List.tabulate(nDup, fn mcid => (z,mcid))) zs)
   in
     map setConf ys
+  end
+
+  (* ルール2: 家のほうがむしろ大きい、会社との関係はどちらともいえない *)
+  fun gen3 {setO = s1, setTr = s2, nDup} = let
+    open List
+    val ss = prodSet [s1, s1, s1, s2] 
+    val ss'= filter (fn [hm,sp,cr,tr] => sp <= hm andalso sp <= cr) ss
+  in
+    concat (map (fn par => tabulate(nDup, fn id => setConf(par, id))) ss')
   end
 end

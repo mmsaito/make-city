@@ -216,7 +216,7 @@ structure Trivial = struct
     ,nVis  = zeroNVis ()
     ,pTrns = zeroPTrns ()
     ,size  = iR o abs @@ rI size + rI size*rgauss rnd
-    ,betaN = abs (betaN + 0.1*betaN*rgauss rnd)
+    ,betaN = abs (betaN + 1.0*betaN*rgauss rnd)
     }: place
   end
 
@@ -436,6 +436,7 @@ structure Trivial = struct
     fun step city = let
       val city = Iterator.applyN F.advanceTime recstep city
       val pop  = Probe.reducePop' city
+      (* val _ = print (sI (#time city) ^ "\n") *)
     in
       city before Probe.showPop os (#time city) pop
     end
