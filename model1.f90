@@ -110,6 +110,7 @@ contains
       read(ist,*) temp; call check(temp,'person:')
       read(ist,*) n; allocate(p(n))
       do i = 1, n
+        p(i)%tid = -999
         read(ist,*) temp; p(i)%role = roleFromString(temp)
         select case (p(i)%role)
         case (Employed); p(i)%mkSched => schedEmp
@@ -367,6 +368,9 @@ contains
       home = findBelong(p%belong, PL_HOME)
       sch%n = 0
       call connect (schedO, sch%n) !build outcome of this proc.
+      
+      
+      
     end if
   contains
     integer function sizeof_sched2() result (it)

@@ -118,6 +118,7 @@ module Frame
     integer :: nHealth
     type(sched) :: sched
     procedure(scheduler_t), pointer :: mkSched => NULL()
+    integer :: tid
   end type
 
   type place_vector
@@ -185,29 +186,49 @@ contains
     end if
   end function
 
+
+  logical function catchTrain__matchSrc(src, step, sked) result (f)
+    type(mob_sched) :: sked
+    integer :: src, step
+    f = sked%time .eq. step .and. sked%area_t .eq. src
+  end function
+
+  logical function catchTrain__matchDst(dst, step, sked) result (f)
+    type(mob_sched) :: sked
+    integer :: dst, step
+    f = sked%time .ge. step .and. sked%area_t .eq. dst
+  end function
+
   ! ToDo: 非常に非効率的。かしこいアルゴにせよ。ex.bsearch
   integer function catchTrain(trains, now, src, dst) result (i)
     type(mobil) :: trains(:)
     integer     :: now, src, dst
     integer     :: step
+    integer     :: ref_test
+    ref_test = src
     step = modulo(now, steps_per_day)
     do i = 1, size(trains)
+      ref_test = src
       if (.not. trains(i)%onService) cycle
-      if (.not. exists(matchSrc, trains(i)%sked)) cycle
-      if (.not. exists(matchDst, trains(i)%sked)) cycle
+! 内部関数渡しにすると、ときどき、クラッシュするようだ。
+!      if (.not. exists(matchSrc, trains(i)%sked)) cycle
+!      if (.not. exists(matchDst, trains(i)%sked)) cycle
+      if (.not. exists2(catchTrain__matchSrc, src, step, trains(i)%sked)) cycle
+      if (.not. exists2(catchTrain__matchDst, dst, step, trains(i)%sked)) cycle
       return
     end do
     i = 0
     return
   contains
-    logical function matchSrc(sked) result (f)
-      type(mob_sched) :: sked
-      f = sked%time .eq. step .and. sked%area_t .eq. src
-    end function
-    logical function matchDst(sked) result (f)
-      type(mob_sched) :: sked
-      f = sked%time .ge. step .and. sked%area_t .eq. dst
-    end function
+!    logical function matchSrc(sked) result (f)
+!      type(mob_sched) :: sked
+!      integer :: sked_time, sked_area, x_step, x_src, x_f
+!      f = sked%time .eq. step .and. sked%area_t .eq. src
+!    end function
+!    logical function matchDst(sked) result (f)
+!      type(mob_sched) :: sked
+!      f = sked%time .ge. step .and. sked%area_t .eq. dst
+!    end function
 !    logical recursive function exists(f,sked) result (ans)
 !      type(mob_sched) :: sked(:)
 !      logical, external :: f
@@ -215,9 +236,27 @@ contains
 !      if (size(sked).eq.1) return
 !      ans = ans .or. exists(f,sked(2:))
 !    end function
-    logical function exists(f,sked) result (ans)
+
+    logical function exists2(f,place,time,sked) result (ans)
+      integer :: place, time
       type(mob_sched) :: sked(:)
       logical, external :: f
+      integer :: i
+      ans = .false.
+      do i = 1, size(sked)
+        ans = f(place,time,sked(i))
+        if (ans) return  
+      end do
+    end function
+
+    logical function exists(f,sked) result (ans)
+      type(mob_sched) :: sked(:)
+      interface
+        logical function f(sked)
+          import
+          type(mob_sched) :: sked
+        end function
+      end interface
       integer :: i
       ans = .false.
       do i = 1, size(sked)
@@ -265,7 +304,16 @@ contains
     type(city), intent(inout) :: city_
     type(person), intent(inout) :: p
     type(place_t) :: dest, tmp
-    integer :: idxTr
+    integer :: idxTr, p_tid_back
+
+    p_tid_back = p%tid
+    !omp atomic
+    p%tid = omp_get_thread_num()
+    
+    if (p_tid_back .gt. 0 .and. p%tid .ne. p_tid_back) then
+      write(*,*) p_tid_back, p%tid
+    end if
+    
 
     call p%mkSched(city_%time, p%sched)
     if (p%dest%kind .eq. NONE) then
@@ -279,19 +327,15 @@ contains
       end if
     else if (p%dest%kind .eq. SOME) then
       if (p%visit%place_k .eq. PL_TRAIN) then 
-        ! !$omp critical
         if (city_%train(p%visit%id)%pl%id%area_t .eq. p%dest%o%area_t) then
           p%visit     = p%dest%o
           p%dest%kind = NONE
         endif
-        ! !$omp end critical
       else
-        ! !$omp critical
         idxTr = catchTrain(city_%train, city_%time, p%visit%area_t, p%dest%o%area_t)
         if (idxTr .ge. 1) then
           p%visit = city_%train(idxTr)%pl%id
         end if
-        ! !$omp end critical
       endif
     else
       write(*,*) 'runtime error: bad option kind = ', p%dest%kind, SOME, NONE
