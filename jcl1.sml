@@ -15,7 +15,7 @@ structure JCL1 = struct
   (* ’S“–ƒ^ƒXƒN‚ÌŒˆ’è *)
   val outbase = "test"
   val idxTask = Int32.toInt (me + offset)
-  val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], nDup = 8}
+  val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], nDup = 12}
   val nTasks = length tasks
 
   val _ = 

@@ -203,7 +203,7 @@ structure Type = struct
 end
 
 structure Frame = struct
-  open Type; infix 1 @@; infix 1 $;
+  open Type; infix 1 @@; infix 9 $;
   open X_Misc;
   open EasyPrint; infix 1 <<
   (* ============================================================== *)
@@ -395,25 +395,32 @@ structure Frame = struct
   
   (* ============================================================== *)
   (* シミュレーションエンジン *)
-  val succTr = ref 0
-  val failTr = ref 0
+  (*
+  *)
 
-  fun catchTrain' (train:mobil vector, now:time, src:area_t, dst:area_t): mobil option = let
+  fun catchTrain (train:mobil vector, now:time, src:area_t, dst:area_t): mobil option = let
     (* steps数単位での(日内)時刻,
      * 平日/土日で異なるダイアを使うときはここを変える必要がある *)
     val {step,...} = timecomp now 
   in
     Vector.find (fn tr => 
-      Vector.exists (fn {time,area_t} => time =  step andalso area_t = src) (#sked tr) andalso 
+      (* Vector.exists (fn {time,area_t} => time =  step andalso area_t = src) (#sked tr) andalso  *)
+      let
+        val {time,area_t} = #sked tr $ (#iSked tr)
+      in
+        time >= step andalso area_t = src
+      end andalso
       Vector.exists (fn {time,area_t} => time >= step andalso area_t = dst) (#sked tr)
     ) train
   end
-
+(*
+  val succTr = ref 0
+  val failTr = ref 0
   fun catchTrain z = 
     case catchTrain' z
       of SOME x => SOME x before succTr := !succTr + 1
        | NONE   => NONE   before failTr := !failTr + 1
-
+*)
   (* いま居る場所の感染効率から確率過程により健康状態を遷移させる *)
   fun updateHealth ({area=areas,train,time}:city) (PERSON p: person): health list = let
     val rnd = getrnd()
@@ -481,17 +488,18 @@ structure Frame = struct
           )
   end
 
-  fun evalTrain (city:city) (tr:mobil) = let
+  fun evalTrain (time_now:time) (tr:mobil) = let
     val {time = time', area_t = area_t'} = #sked tr $ (#iSked tr)
     val steps_per_day = Real.round (1.0/dt)
-    val steps   = (#time city) mod steps_per_day 
+    val steps = time_now mod steps_per_day 
   in
+    (* 発車時間がくるまでは、停車駅にずっといて、発車時間がきたら、瞬間的に次の駅へ移動 *)
     if (steps = time') then
       {id    = {place_k = Train, id = #id (#id tr), area_t = area_t', tVis = #tVis (#id tr)}
       ,nVis  = #nVis tr
       ,pTrns = #pTrns tr
       ,size  = #size tr
-      ,betaN  = #betaN tr
+      ,betaN = #betaN tr
       ,iSked = (#iSked tr + 1) mod (Vector.length (#sked tr))
       ,sked  = #sked tr
       }
@@ -583,14 +591,18 @@ structure Frame = struct
     ;estTransit city)
   end
 
-  fun advanceTime (city:city): city = 
-    evalPlace
-      {area  = Vector.map 
+  fun advanceTime (city:city): city = let
+    val new_area = 
+      Vector.map 
         (fn (id,persons,places) => 
-          (id, map (evalPerson city) persons, places)) (#area city)
-      ,train = Vector.map (evalTrain city) (#train city)
-      ,time  = #time city + 1
-      }
+          (id, map (evalPerson city) persons, places))  (#area city)
+    val new_train = Vector.map (evalTrain (#time city)) (#train city)
+    (* ----< bondary of time> ------------------------------------- *)
+    val new_time = #time city + 1
+  in
+    evalPlace {area = new_area, train = new_train, time = new_time}
+  end
+
   fun mtime f = let
     val t0 = Time.now()
   in

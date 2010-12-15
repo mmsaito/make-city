@@ -209,19 +209,19 @@ structure Trivial = struct
     List.tabulate (1 + iR (abs (2.0 * rgauss rnd)), fn _ => fn _ => true) end
 
   (* 公共空間生成ルール *)
-  fun rulePlace' size betaN place_t = let
+  fun rulePlace' betaN place_t = let
     val rnd = getrnd()
   in
     {id    = place_t 
     ,nVis  = zeroNVis ()
     ,pTrns = zeroPTrns ()
-    ,size  = iR o abs @@ rI size + rI size*rgauss rnd
+    ,size  = 0 (* no longer referred *)
     ,betaN = abs (betaN + 1.0*betaN*rgauss rnd)
     }: place
   end
 
-  fun rulePlace place_k size betaN area_t id = 
-    rulePlace' size betaN {place_k = place_k, area_t = area_t, id = id, tVis = ref ~1}
+  fun rulePlace place_k betaN area_t id = 
+    rulePlace' betaN {place_k = place_k, area_t = area_t, id = id, tVis = ref ~1}
 
   (* 行動範囲ルール *) 
   fun ruleVisit (areas: area vector)(PERSON p: person): place_t list = let
@@ -239,11 +239,17 @@ structure Trivial = struct
     val selCram = rndSelLP rnd
       [(0.4, fn () => SOME (rndSelV rnd (rndSelL rnd (crams()))))
       ,(0.6, fn () => NONE)]
+
+    fun selSch () = let
+      val a = rndSelLP rnd [(0.8,a0), (0.2, a')]  (* 8割は地元へ、残り2割りは学区外へ *)
+    in
+      rndSelV rnd (#sch a)
+    end
   in
     case #role p 
       of Employed => map #id [rndSelV rnd (#corp a') , rndSelV rnd (#super a0)]
-       | Student  => map #id (selCram() `:: [rndSelV rnd (#sch a0), rndSelV rnd (#super a0)])
-       | HausFrau => map #id [rndSelV rnd (#super a0), rndSelV rnd (#park a0) ]
+       | Student  => map #id (selCram() `:: [selSch (), rndSelV rnd (#super a0)])
+       | HausFrau => map #id [rndSelV rnd (#super a0), rndSelV rnd (#super a'), rndSelV rnd (#park a0) ]
   end
 
   (* 鉄道運行ルール *)
@@ -257,6 +263,31 @@ structure Trivial = struct
        ]) [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
      ) [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23])
 
+
+  (* 学校数,会社数の表 *)
+  fun makePopTable (conf:conf) = let
+    val nAvgPop  = #nPop conf
+    val nCityPop = nAvgPop * 5
+    val nTownPop = nAvgPop
+    val stuRate  = 0.20 (* 人口に占める学生の割合 *)
+    val empRate  = 0.50 (* 人口に占める従業員の割合 *)
+    val wEmpPerCorp = 100.0 (* 1社あたりの従業員数 *)
+    val popTable0 =
+     [{area_t = HAC, wStuPerSch = 424.0, wCorp =  5.0, nTownPop = nTownPop}
+     ,{area_t = TAC, wStuPerSch = 442.0, wCorp = 10.0, nTownPop = nTownPop}
+     ,{area_t = JOJ, wStuPerSch = 419.0, wCorp =  5.0, nTownPop = nTownPop}
+     ,{area_t = SJK, wStuPerSch = 277.0, wCorp = 40.0, nTownPop = nTownPop}
+     ,{area_t = TKY, wStuPerSch = 348.0, wCorp = 40.0, nTownPop = nTownPop}
+     ]
+    val wSumCorp = foldl (fn ({wCorp,...},s) => s + wCorp) 0.0 popTable0
+    fun norm {area_t = n, wStuPerSch, wCorp, nTownPop} =
+      {area_t = n
+      ,nSch   = Real.ceil (rI nTownPop*stuRate/wStuPerSch)
+      ,nCorp  = Real.ceil (rI nCityPop*empRate/wEmpPerCorp*(wCorp/wSumCorp))
+      }
+  in
+    map norm popTable0
+  end
   (* ====================================================================  *)
   (* 上記ルールによる都市の組み立て *)
   fun perHome (conf:conf) at = let
@@ -265,20 +296,25 @@ structure Trivial = struct
     F.makeHome at betaN (F.makePerson (#nPop conf) rulePerson) ruleHome
   end
 
-  fun place (conf:conf) at home = let
+  fun place (conf:conf) = let
     infixr 2 `::
     fun op `:: ((true,x),xs)  = x :: xs
       | op `:: ((false,_),xs) = xs
-  in
-    F.makePlace at home (
-        (at = SJK orelse at = TAC, 
-         ( 1, rulePlace Cram 100 (#betaNSch   conf)) )`::
-        [(10, rulePlace Sch  100 (#betaNSch   conf))
-        ,(10, rulePlace Super 20 (#betaNSuper conf))
-        ,(19, rulePlace Corp  15 (#betaNCorp  conf))
-        ,( 2, rulePlace Park 100 (#betaNPark  conf))
-        ]
-      ) 
+    val popTbl  = makePopTable conf
+  in fn at => fn home =>
+    let 
+      val {nSch, nCorp, ...} = valOf (List.find (fn {area_t,...} => area_t = at) popTbl)
+    in 
+      F.makePlace at home (
+          (at = SJK orelse at = TAC, 
+           ( 1   , rulePlace Cram  (#betaNSch   conf)) )`::
+          [(nSch , rulePlace Sch   (#betaNSch   conf))
+          ,(10   , rulePlace Super (#betaNSuper conf))
+          ,(nCorp, rulePlace Corp  (#betaNCorp  conf))
+          ,( 2   , rulePlace Park  (#betaNPark  conf))
+          ]
+        ) 
+    end
   end
 
   fun infect (conf:conf)(area:area) = let
@@ -295,6 +331,7 @@ structure Trivial = struct
         infect conf (at, per, place conf at home)
       ) (perHome conf at)) 
         #[HAC, TAC, JOJ, SJK, TKY]
+
   fun train (conf:conf) = F.makeTrains 
     {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
 
