@@ -33,22 +33,7 @@ structure Trivial = struct
     ,mcid      : string
     }
   (* 設定例 *)
-  val conf0: conf =
-    {betaNHome  = 1.4 * gamma
-    ,betaNSch   = 1.8 * gamma
-    ,betaNSuper = 1.4 * gamma
-    ,betaNCorp  = 1.8 * gamma
-    ,betaNTrain = 1.8 * gamma
-    ,betaNPark  = 0.5 * gamma
-    ,infectRule = 
-      {tag = "EMP_15_JOJ_SNK"
-      ,n    = 50
-      ,rule = {role = ROL_SOME Employed, livein = LIV_SOME JOJ, workat = WOR_SOME [(SJK,Corp)]}
-      }
-    ,nPop       = 3000
-    ,tag        = "sample"
-    ,mcid       = ""
-    }
+:
 
   (* テストデータ *)
   val frau = let
