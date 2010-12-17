@@ -23,7 +23,8 @@ structure JCL1 = struct
   (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
 
-  val conf = let
+
+  fun conf (infectRule:{tag:string,n:int,rule:belongSpec}) = let
     val super  = 0.3
     val park   = 0.5
     val home   = 1.2
@@ -37,11 +38,7 @@ structure JCL1 = struct
     ,betaNCorp  = corp   * Type.gamma
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
-    ,infectRule = 
-      {tag = "EMP_15_JOJ_SNK"
-      ,n    = 60
-      ,rule = {role = ROL_SOME Employed, livein = LIV_SOME JOJ, workat = WOR_SOME [(SJK,Corp)]}
-      }
+    ,infectRule = infectRule
     ,nPop       = 6000
     ,tag        = 
       String.concatWith "_" (
@@ -50,7 +47,48 @@ structure JCL1 = struct
     }
   end
 
-  val tasks = GenTask.dup' (14, conf:Trivial.conf): Trivial.conf list
+  val tasks 
+   =  GenTask.dup' (14, conf 
+        {tag = "EMP_60_JOJ_LOCAL"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME JOJ
+                ,workat = WOR_LOCAL
+                }
+        })
+   @ GenTask.dup' (14, conf 
+        {tag = "HUS_60_JOJ_LOCAL"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Hausfrau
+                ,livein = LIV_SOME JOJ
+                ,workat = WOR_LOCAL
+                }
+        }) 
+   @ GenTask.dup' (14, conf 
+        {tag = "EMP_60_HAC_SJK"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME HAC
+                ,workat = WOR_SOME [(SJK,Corp)]
+                }
+        }) 
+   @ GenTask.dup' (14, conf 
+        {tag = "EMP_60_HAC_SNJ"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME HAC
+                ,workat = WOR_SOME [(SJK,Corp)]
+                }
+        }) 
+   @ GenTask.dup' (14, conf 
+        {tag = "CRM_60_JOJ_SNJ"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Student
+                ,livein = LIV_SOME HAC
+                ,workat = WOR_SOME [(SJK,Cram)]
+                }
+        }) 
+
   val nTasks = length tasks
 
   val _ = 
