@@ -1,7 +1,7 @@
 #(make 2>&1) > err
 FC = ifort
 #OPT = /Qopenmp /Zi /check /traceback /Od
-OPT = /Qopenmp /check
+OPT =  /Qopenmp-profile
 
 all: jcl_sh1.exe
 

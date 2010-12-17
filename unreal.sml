@@ -1,4 +1,7 @@
 (*
+ * パンデミック・エージェント・シミュレータ "Unreal"
+ * -------------------------------------------------
+ * 以下のコメントはまったくobsoletedなので、後で書き直すこと。
 (1) 性別・年齢別人口分布に従って「裸の人間」たちを生成する
 (2) (1)のメンバに社会的役割 (Employed | Hausfrau | Student)を与える
 ----
@@ -80,8 +83,9 @@ structure Type = struct
   (* 空間 *)
   type id   = int
   type size = int
+
   (* datatype area = HAC | TAC | JOJ | SJK | TKY *)
-  (* 数として扱いたいかもしれないので *)
+  (* としてしたいが、配列の添え字にしたいので *)
   type area_t = int
     val HAC = 0:area_t
     val TAC = 1:area_t
@@ -112,16 +116,11 @@ structure Type = struct
                ,iSked: int, sked: {time:time, area_t:area_t} vector}
   (* 感染効率にβではなくβNを使う理由
      - 今回はSEIRと違い、小集団ごとの人口Nは時々刻々と変化するので、
-       スケールフリーなβNを使う必要がある。
-     - なお、βN ～ O(1)である。
-   * 言語の特性からくる妥協
-     OOP風に云えば、placeを継承してmobilを定義したいところだが、SMLは
-     SML#とちがって、「すくなくともこのフィールドを持つレコード型」が
-     描けないので、 コンポジションとしてplaceを含む方定義にしている。
-
-     と思ったが、継承もコンポジションも必要ないことがわかったので、
-     単にフィールド追加にする。
+       スケールフリーなβN ～ O(1) を使う。
+   * 設計上のミス: mobilはplaceをcompositionすべきだった。せざるために、
+   * 数か所で、copy & pasteが発生してしまった。
    *)
+
   datatype person = PERSON of
     { age    : age
     , gender : gender
@@ -168,13 +167,7 @@ structure Type = struct
   fun projHome x = 
     valOf (List.find (fn (p:place_t) => #place_k p = Home) x)
   fun areaPer (PERSON {belong, ...}:person) = #area_t (projHome belong)
-    (*
-  fun localPer (PERSON p:person) = let
-    val i = areaPer (PERSON p)
-  in
-    List.filter (fn plc => i = #area_t plc) (#belong p)
-  end
-  *)
+  
   (* place_t で指定される場所を全都市から探す *)
   fun placeAreas (areas: area vector) ({area_t,place_k,id,...}: place_t) =
     case place_k 
@@ -194,12 +187,18 @@ structure Type = struct
     fun getrnd () =
       case (!rndref)
         of SOME r => r
-         | NONE   => (print "model1.sml:20: random number is not initialized!  Using default!"
+         | NONE   => (print "unreal.sml:190: random number is not initialized!  Using default!\n"
                      ;rndref := SOME (Random.rand (0,1))
                      ;valOf(!rndref)
                      )
     fun inirnd n = rndref := SOME (Random.rand(0,n))
   end
+
+  (* 行動パターンによる検索に使う型 *)
+  datatype roleOpt   = ROL_ARBIT | ROL_SOME of role
+  datatype liveinOpt = LIV_ARBIT | LIV_SOME of area_t  (* for livein *)
+  datatype workatOpt = WOR_ARBIT | WOR_LOCAL | WOR_SOME of (area_t * place_k) list
+  type belongSpec = {role: roleOpt, livein: liveinOpt, workat: workatOpt}
 end
 
 structure Frame = struct
@@ -356,11 +355,30 @@ structure Frame = struct
     ) services
   end
 
-  (* 6. 感染者のばらまき *)
-  (* 【注意】これははっきりいって良い定式化が思い当たらない。ので、とりあえずテスト計算
-   * がはじめられるように、アドほっくにつくる。
-   *)
-  (* distInfect:
+  (* 6. 探索 *)  
+
+  fun matchBelongSpec ({role, livein, workat}: belongSpec) (PERSON p) = let
+    val isHome = fn ({place_k = Home, ...}:place_t) => true | _ => false
+    val hometown = #area_t (valOf (List.find isHome (#belong p)))
+    fun eqRole (ROL_ARBIT, _) = true
+      | eqRole (ROL_SOME x, y) = x = y
+    fun eqLive (LIV_ARBIT, _) = true
+      | eqLive (LIV_SOME x, y) = x = y
+    fun eqWork (WOR_LOCAL , ys) = List.all (fn ({area_t,...}:place_t) => area_t = hometown) ys
+      | eqWork (WOR_ARBIT , _ ) = true
+      | eqWork (WOR_SOME xs,ys) = 
+      List.all (fn (area_t':area_t,place_k':place_k) => 
+        List.exists (fn ({area_t,place_k,...}: place_t) =>
+          area_t = area_t' andalso place_k = place_k') ys) xs
+  in
+    eqRole (role, #role p) andalso 
+    eqLive (livein, hometown) andalso 
+    eqWork (workat, #belong p)
+  end
+
+
+  (* 7. 感染者のばらまき *)
+  (* (1) distInfect:
    *  area 内で
    *  重複しないようにランダムに指定個を選び出し、指定された健康状態にする *)
   fun distInfect rnd (area:area) (rules: (size * health) list): area = let
@@ -392,19 +410,39 @@ structure Frame = struct
     ,List.concat (rev (rest :: modified))
     ,#3 area)
   end
-  
+
+  (* だが、これは見かけ上の多様性を生み、シミュレーション結果の解釈が困難になった
+   * ので、以下の決定論的なものに切り替えることにした。*)
+ 
+  (* (2) ruleInfect : 
+   *   area内で、条件を満たす人に * 決定論的に * 感染させる *)
+  fun ruleInfect (n:int) (spec:belongSpec) (area:area) = let 
+    val pop = #2 area 
+    fun setExposed (PERSON p:person) =
+      PERSON { age    = #age p
+             , gender = #gender p
+             , role   = #role p
+             , belong = #belong p
+             , visit  = #visit p
+             , dest   = #dest p
+             , health = [EXP 0]
+             , mkSched= #mkSched p
+             , sched  = #sched p }
+    val n' = ref n
+    fun setExposedIf p = 
+      if (!n' > 0 andalso matchBelongSpec spec p) 
+        then setExposed p before n' := !n' - 1
+        else p
+  in
+    (#1 area, map setExposedIf (#2 area),#3 area): area
+  end
+
   (* ============================================================== *)
   (* シミュレーションエンジン *)
-  (*
-  *)
-
   fun catchTrain (train:mobil vector, now:time, src:area_t, dst:area_t): mobil option = let
-    (* steps数単位での(日内)時刻,
-     * 平日/土日で異なるダイアを使うときはここを変える必要がある *)
     val {step,...} = timecomp now 
   in
     Vector.find (fn tr => 
-      (* Vector.exists (fn {time,area_t} => time =  step andalso area_t = src) (#sked tr) andalso  *)
       let
         val {time,area_t} = #sked tr $ (#iSked tr)
       in
@@ -430,9 +468,8 @@ structure Frame = struct
          | place_t                    => #pTrns (placeAreas areas place_t)
     val cur::hist = #health p
   in
-    (* 注: 履歴のとり方に注意。リスト連結は、効率が悪いが、簡潔に書くにはこう。
-     * rndSel rnd (#s2e pTrns) (EXP time, cur) :: cur :: hist ではない!!
-     * という間違ったことをすると、10倍遅くなる。*)
+    (* 注: 履歴のとり方に注意。
+     * rndSel rnd (#s2e pTrns) (EXP time, cur) :: cur :: hist ではない!! *)
     case cur
       of SUS   => rndSel rnd (#s2e pTrns) ([EXP time, cur],[cur]) @ hist
        | EXP _ => rndSel rnd (#e2i pTrns) ([INF time, cur],[cur]) @ hist
@@ -441,9 +478,6 @@ structure Frame = struct
   end
 
   (* 人間の振る舞いのこのプログラムが「お仕着せる」部分。核である *)
-
-  (* その前に、[(pr,x) ...] から確率prでxを取るルーチンを書け *)
-
   fun evalPerson (city:city) (PERSON p: person) = let
     val {area=areas,train,time} = city
     fun update {visit, dest, sched} = PERSON
@@ -509,7 +543,6 @@ structure Frame = struct
 
   (* SEIRモデルに基づく、場所毎の各健康状態にいる人口の推移の予測 *)
   fun estTransitP (p:place): place = let
-    (* val n = Real.fromInt (#size p)   (* これはバグってハニー!! *) *)
     val s = Real.fromInt (!(#s(#nVis p)))
     val e = Real.fromInt (!(#e(#nVis p)))
     val i = Real.fromInt (!(#i(#nVis p)))
@@ -591,6 +624,7 @@ structure Frame = struct
     ;estTransit city)
   end
 
+  (* シミュレーションのトップレベル関数 *)
   fun advanceTime (city:city): city = let
     val new_area = 
       Vector.map 
@@ -658,4 +692,100 @@ structure Probe = struct
 
   fun showPlace_t ({area_t,id,place_k,...}:place_t) = 
     fI area_t ^ "," ^ fI id ^ "," ^ showPlace_k place_k ^ ","
+
+  (* 印字機 *)
+  fun showRole Employed = "Employed" 
+    | showRole Hausfrau = "Hausfrau" 
+    | showRole Student  = "Student" 
+
+  fun showHealth SUS        = "SUS," ^ "0" (* dummy *)
+    | showHealth (EXP time) = "EXP," ^ sI time
+    | showHealth (INF time) = "INF," ^ sI time
+    | showHealth (VAC time) = "VAC," ^ sI time   
+    | showHealth (REC time) = "REC," ^ sI time
+
+  fun showPlace_k' Cram  = "Cram"
+    | showPlace_k' Sch   = "Sch"
+    | showPlace_k' Corp  = "Corp"
+    | showPlace_k' Home  = "Home"
+    | showPlace_k' Super = "Super"
+    | showPlace_k' Park  = "Park"
+    | showPlace_k' Train = "Train"
+
+  fun showPlace_t' ({area_t, place_k, id, ...}: place_t) =
+    String.concat [sI area_t,",", showPlace_k' place_k,",", sI id]
+
+  (* シミュレーション状態を書き出す。Fortranで読みやすい形式にしている 
+   *   - 初期条件を書き出すことしか想定していないので、完全でないかも
+   *     しれない。*)
+  fun writeCity (city:city) (f:string) = let
+    val os = TextIO.openOut f
+    fun w s = TextIO.output(os, s)
+    fun w' s = (w s; w "\n")
+    fun w_ s = (w s; w ",")
+
+    val w_place_t = w' o showPlace_t' 
+
+    fun w_person (PERSON {role, belong, visit, dest, health, ...}) = 
+      (w' (showRole role) 
+      ;w' "belong:"; w (sI o length @@ belong); w' ",length"
+      ;app w_place_t belong
+      ;w' "health:"
+      ;w' (showHealth (hd health))
+      )
+
+    fun w_place (pl: place) = 
+      (w_place_t (#id pl)
+      ;w' "betaN:"
+      ;w' (sR (#betaN pl))
+      )
+
+    fun w_place_group({cram,sch,corp,park,super,home}:places) =
+      (w' (showPlace_k' Cram); w (sI o Vector.length @@ cram); w' ",length"
+      ;Vector.app w_place cram
+
+      ;w' (showPlace_k' Sch); w (sI o Vector.length @@ sch) ; w' ",length"
+      ;Vector.app w_place sch
+
+      ;w' (showPlace_k' Corp); w (sI o Vector.length @@ corp); w' ",length" 
+      ;Vector.app w_place corp
+
+      ;w' (showPlace_k' Park); w (sI o Vector.length @@ park); w' ",length" 
+      ;Vector.app w_place park
+
+      ;w' (showPlace_k' Super); w (sI o Vector.length @@ super); w' ",length" 
+      ;Vector.app w_place super
+
+      ;w' (showPlace_k' Home); w (sI o Vector.length @@ home); w' ",length" 
+      ;Vector.app w_place home
+      )
+
+    fun w_train({id: place_t, nVis: nVis, size: size, betaN: real, pTrns:pTrns
+               ,iSked: int, sked: {time:time, area_t:area_t} vector}:mobil) =
+      (w_place_t id
+      ;w' "betaN:"
+      ;w' (sR betaN)
+      ;w (sI (Vector.length sked)); w' (",length")
+      ;w' "sked:"
+      ;Vector.app (fn {time,area_t} => (w (sI time); w ","; w' (sI area_t))) sked
+      )
+
+    fun w_area(area:area) =
+     (w' (sI (#1 area) ^ ", id" ) (* id *)
+     ;w' "person:"; w' (sI (length (#2 area)))
+     ;List.app w_person (#2 area)
+     ;w' "place-group:"; w (sI 6); w' ",length" (* type places *)
+     ;w_place_group (#3 area)
+     )
+    fun w_time(time:time) = w' (sI time)
+  in
+    (w' "area:"; w (sI (Vector.length (#area city))); w' ",length"
+    ;Vector.app w_area (#area city)
+    ;w' "train:"; w' (sI (Vector.length (#train city)))
+    ;Vector.app w_train (#train city)
+    ;w' "time:"
+    ;w(sI (#time city)^"\n")
+    ;TextIO.closeOut os
+    )
+  end
 end

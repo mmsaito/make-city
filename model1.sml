@@ -15,6 +15,10 @@ structure Trivial = struct
   (* モデル設定パラメータ:
     実装上の注意: 内容はtenativeかつadhocである。型を立てるのは、記述上の便宜のためであって、
       設計上の理由ではない。
+     - 12/16追記:
+       - モデルに出てくる数値パラメータをconfに置くことにすると、作業がしにくくなる。
+       - そこで、パラメータ探索の対象となるもの(これは、研究の進行とともに変化す
+         る流動的なものである) だけをconfに書くことにする。
    *)
   type conf = 
     {betaNHome : real
@@ -23,7 +27,7 @@ structure Trivial = struct
     ,betaNCorp : real
     ,betaNPark : real
     ,betaNTrain: real
-    ,e0_JOJ    : int
+    ,infectRule: {tag:string, n:int, rule:belongSpec}
     ,nPop      : int (* ひとつの街の人口。後で配列にする *)
     ,tag       : string
     ,mcid      : string
@@ -36,7 +40,11 @@ structure Trivial = struct
     ,betaNCorp  = 1.8 * gamma
     ,betaNTrain = 1.8 * gamma
     ,betaNPark  = 0.5 * gamma
-    ,e0_JOJ     = 30
+    ,infectRule = 
+      {tag = "EMP_15_JOJ_SNK"
+      ,n    = 50
+      ,rule = {role = ROL_SOME Employed, livein = LIV_SOME JOJ, workat = WOR_SOME [(SJK,Corp)]}
+      }
     ,nPop       = 3000
     ,tag        = "sample"
     ,mcid       = ""
@@ -67,8 +75,8 @@ structure Trivial = struct
 
   (* 行動テンプレート *)
   (* 次のような振る舞い
-   * ToDo: このこめんとをきちんとメンテナンスしておくように。
    * 会社員: 月～金は会社へ、土日は会社以外に適当に
+   * 学生  : 月～金は学校へ、人によっては塾通いをしている。
    * 主婦  : 一日n回はスーパーに行く。
    *
    *)
@@ -131,13 +139,6 @@ structure Trivial = struct
               ,List.nth(#belong p, irndIn rnd (0, length(#belong p)))
               )
             )
-(* でたらめぶりは、上のように改定したもののほうが望ましかろう
-          ListPair.zip
-            ( List.tabulate
-               ( irndIn rnd (1,length (#belong p))
-               , fn _ => today + irndIn rnd (10*hours',18*hours'))
-            , #belong p)
-*)
         )
     else
       #sched p
@@ -263,7 +264,6 @@ structure Trivial = struct
        ]) [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
      ) [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23])
 
-
   (* 学校数,会社数の表 *)
   fun makePopTable (conf:conf) = let
     val nAvgPop  = #nPop conf
@@ -288,6 +288,7 @@ structure Trivial = struct
   in
     map norm popTable0
   end
+
   (* ====================================================================  *)
   (* 上記ルールによる都市の組み立て *)
   fun perHome (conf:conf) at = let
@@ -317,124 +318,29 @@ structure Trivial = struct
     end
   end
 
-  fun infect (conf:conf)(area:area) = let
-    val rnd = getrnd()
-  in
-    if (#1 area = JOJ) 
-      then F.distInfect rnd area [(#e0_JOJ conf,EXP 0)]
-      else area
-  end
-
   fun area (conf:conf) = 
-    Vector.map (fn at => 
-      (fn (per,home) => 
-        infect conf (at, per, place conf at home)
-      ) (perHome conf at)) 
-        #[HAC, TAC, JOJ, SJK, TKY]
+    Vector.map 
+      (fn at => 
+        (fn (per,home) =>
+          (at, per, place conf at home)
+        ) (perHome conf at)
+      ) #[HAC, TAC, JOJ, SJK, TKY]
 
   fun train (conf:conf) = F.makeTrains 
     {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
 
-  fun city (conf:conf) = 
+  val infect_rule1: area -> area =  
+    F.ruleInfect 5 {role = ROL_SOME Employed, livein = LIV_SOME JOJ, workat = WOR_SOME [(2,Corp)]}
+
+  fun city (conf:conf) =  let
+    val infect = F.ruleInfect (#n (#infectRule conf)) (#rule (#infectRule conf))
+  in
     F.evalPlace
-      {area = F.makeVisit' (area conf) ruleVisit
+      {area  = Vector.map infect (F.makeVisit' (area conf) ruleVisit)
       ,train = train conf
       ,time = 0
       }
-  
-  (* 印字機 *)
-  fun showRole Employed = "Employed" 
-    | showRole Hausfrau = "Hausfrau" 
-    | showRole Student  = "Student" 
-
-  fun showHealth SUS        = "SUS," ^ "0" (* dummy *)
-    | showHealth (EXP time) = "EXP," ^ sI time
-    | showHealth (INF time) = "INF," ^ sI time
-    | showHealth (VAC time) = "VAC," ^ sI time   
-    | showHealth (REC time) = "REC," ^ sI time
-
-  fun showPlace_k' Cram  = "Cram"
-    | showPlace_k' Sch   = "Sch"
-    | showPlace_k' Corp  = "Corp"
-    | showPlace_k' Home  = "Home"
-    | showPlace_k' Super = "Super"
-    | showPlace_k' Park  = "Park"
-    | showPlace_k' Train = "Train"
-
-  fun showPlace_t' ({area_t, place_k, id, ...}: place_t) =
-    String.concat [sI area_t,",", showPlace_k' place_k,",", sI id]
-
-  fun writeCity (city:city) (f:string) = let
-    val os = TextIO.openOut f
-    fun w s = TextIO.output(os, s)
-    fun w' s = (w s; w "\n")
-    fun w_ s = (w s; w ",")
-
-    val w_place_t = w' o showPlace_t' 
-
-    fun w_person (PERSON {role, belong, visit, dest, health, ...}) = 
-      (w' (showRole role) 
-      ;w' "belong:"; w (sI o length @@ belong); w' ",length"
-      ;app w_place_t belong
-      ;w' "health:"
-      ;w' (showHealth (hd health))
-      )
-
-    fun w_place (pl: place) = 
-      (w_place_t (#id pl)
-      ;w' "betaN:"
-      ;w' (sR (#betaN pl))
-      )
-
-    fun w_place_group({cram,sch,corp,park,super,home}:places) =
-      (w' (showPlace_k' Cram); w (sI o Vector.length @@ cram); w' ",length"
-      ;Vector.app w_place cram
-
-      ;w' (showPlace_k' Sch); w (sI o Vector.length @@ sch) ; w' ",length"
-      ;Vector.app w_place sch
-
-      ;w' (showPlace_k' Corp); w (sI o Vector.length @@ corp); w' ",length" 
-      ;Vector.app w_place corp
-
-      ;w' (showPlace_k' Park); w (sI o Vector.length @@ park); w' ",length" 
-      ;Vector.app w_place park
-
-      ;w' (showPlace_k' Super); w (sI o Vector.length @@ super); w' ",length" 
-      ;Vector.app w_place super
-
-      ;w' (showPlace_k' Home); w (sI o Vector.length @@ home); w' ",length" 
-      ;Vector.app w_place home
-      )
-
-    fun w_train({id: place_t, nVis: nVis, size: size, betaN: real, pTrns:pTrns
-               ,iSked: int, sked: {time:time, area_t:area_t} vector}:mobil) =
-      (w_place_t id
-      ;w' "betaN:"
-      ;w' (sR betaN)
-      ;w (sI (Vector.length sked)); w' (",length")
-      ;w' "sked:"
-      ;Vector.app (fn {time,area_t} => (w (sI time); w ","; w' (sI area_t))) sked
-      )
-
-    fun w_area(area:area) =
-     (w' (sI (#1 area) ^ ", id" ) (* id *)
-     ;w' "person:"; w' (sI (length (#2 area)))
-     ;List.app w_person (#2 area)
-     ;w' "place-group:"; w (sI 6); w' ",length" (* type places *)
-     ;w_place_group (#3 area)
-     )
-    fun w_time(time:time) = w' (sI time)
-  in
-    (w' "area:"; w (sI (Vector.length (#area city))); w' ",length"
-    ;Vector.app w_area (#area city)
-    ;w' "train:"; w' (sI (Vector.length (#train city)))
-    ;Vector.app w_train (#train city)
-    ;w' "time:"
-    ;w(sI (#time city)^"\n")
-    ;TextIO.closeOut os
-    )
   end
-
 
   (* 3000人 、1日で、45[sec] 
      150万人、1日で、6.25[時間]    (実スケール)
@@ -454,7 +360,7 @@ structure Trivial = struct
     ;T.output(os, "betaNCorp," ^ fG 14 (#betaNCorp conf) ^ "\n")
     ;T.output(os, "betaNSuper,"^ fG 14 (#betaNSuper conf) ^ "\n")
     ;T.output(os, "betaNTrain,"^ fG 14 (#betaNTrain conf) ^ "\n")
-    ;T.output(os, "e0_JOJ,"    ^ fI (#e0_JOJ conf) ^ "\n")
+    (* ;T.output(os, "e0_JOJ,"    ^ fI (#e0_JOJ conf) ^ "\n") *)
     ;T.closeOut os
     )
   end

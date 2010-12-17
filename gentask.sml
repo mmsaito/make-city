@@ -8,12 +8,15 @@ structure GenTask = struct
     ,betaNSch   = p3  * gamma
     ,betaNCorp  = p3  * gamma
     ,betaNTrain = p4  * gamma
-    ,e0_JOJ     = 30
+    ,infectID     = 30
     ,nPop       = 3000
     ,tag  = String.concatWith "_" (map Real.toString [p1,p2,p3,p4])
     ,mcid = let open StringCvt in padLeft #"0" 3 (Int.fmt DEC mcid) end
     }
-    | setConf _ = (print "# of elements don't agree!, Isn't is bug?\n"; raise Bind)
+    | setConf _ = 
+      (print "The length of each list should be 4!\n"
+      ;raise Bind
+      )
 
   (* 重複組み合わせを枚挙する *)
   fun enumHP (nil, _) = nil
@@ -29,11 +32,28 @@ structure GenTask = struct
     | prodSet nil = [nil]
 
   (* モンテカルロの分だけ複製する *)
-  fun dup (xs,n) = let
+  fun dup (n,xs) = let
     fun dd 0 x = nil
       | dd n x = x :: dd (n-1) x
   in
     List.concat (map (dd n) xs)
+  end
+
+  fun dup' (n, conf:Trivial.conf) = let
+    fun set (x:Trivial.conf) mcid  =
+    {betaNPark  = #betaNPark x
+    ,betaNHome  = #betaNHome x
+    ,betaNSuper = #betaNSuper x
+    ,betaNSch   = #betaNSch x
+    ,betaNCorp  = #betaNCorp x
+    ,betaNTrain = #betaNTrain x
+    ,infectRule = #infectRule x
+    ,nPop       = #nPop x
+    ,tag        = #tag x    
+    ,mcid       = Int.toString mcid
+    }: Trivial.conf
+  in
+    List.tabulate(n, set conf)
   end
 
   (* ルール1: 単純な重複組み合わせとする *)
@@ -67,4 +87,7 @@ structure GenTask = struct
   in
     concat (map (fn par => tabulate(nDup, fn id => setConf(par, id))) ss')
   end
+
 end
+
+

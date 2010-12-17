@@ -110,7 +110,6 @@ contains
       read(ist,*) temp; call check(temp,'person:')
       read(ist,*) n; allocate(p(n))
       do i = 1, n
-        p(i)%tid = -999
         read(ist,*) temp; p(i)%role = roleFromString(temp)
         select case (p(i)%role)
         case (Employed); p(i)%mkSched => schedEmp
@@ -224,7 +223,7 @@ contains
 
 
   subroutine schedEmp(p, t, sch)
-    class(person) :: p ! implicitly passed pointer to object
+    type(person) :: p ! implicitly passed pointer to object
     integer       :: t, isize, today, i
     type(sched)   :: sch
     type(tmcomp) :: tm
@@ -257,7 +256,7 @@ contains
   end subroutine 
 
   subroutine schedStu(p, t, sch)
-    class(person) :: p ! implicitly passed pointer to object
+    type(person) :: p ! implicitly passed pointer to object
     integer       :: t, isize, today, i
     type(sched)   :: sch
     logical       :: exists
@@ -315,7 +314,7 @@ contains
   end function
 
   subroutine schedHaus(p, t, sch)
-    class(person) :: p ! implicitly passed pointer to object
+    type(person) :: p ! implicitly passed pointer to object
     integer       :: t, isize, today, i, j, idx(size(p%belong)), kind, nOthers, nO
     type(sched)   :: sch
     logical       :: exists
@@ -439,6 +438,7 @@ contains
 !        write(*,*) 'id = ', omp_get_thread_num(), 'time = ', city_%time, ', counter = ', i
         !$omp end master
 
+! トリップモニタ
 !      write(*,'(I5,10I2,","10I5)') city_%time, &
 !       (city_%area(1)%person(k)%visit%place_k, k = 1, 10), &
 !       (city_%area(1)%person(k)%sched%time(1), k = 1, 10)

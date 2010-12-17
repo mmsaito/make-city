@@ -15,7 +15,7 @@ program JCL1
   !call readCity(city_, "test200000.city")  
   call readCity(city_, "test3000-sig1.0.city")
   call simpleReadCheck(city_)
-  call run1(1, 1440*10, "./", "test", city_)
+  call run1(1, 1440*180, "./", "test", city_)
 
   t1 = time()
   write(*,*) t1 - t0

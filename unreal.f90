@@ -33,6 +33,7 @@ module Frame
   integer, parameter :: iminutes= nint(minutes)
 
   type health
+    sequence
     integer :: kind
     integer :: time
   end type
@@ -56,6 +57,7 @@ module Frame
   integer, parameter :: PL_MAX   = PL_TRAIN
 
   type place_t
+    sequence
     integer :: area_t, place_k, id
     integer :: tVis !使わないかもしれない
   end type
@@ -63,6 +65,7 @@ module Frame
   integer, parameter :: NONE = 0
   integer, parameter :: SOME = 1
   type place_t_option
+    sequence
     integer       :: kind
     type(place_t) :: o
   end type
@@ -89,6 +92,7 @@ module Frame
 
   integer, parameter :: SCHED_MAX = 20
   type sched
+    sequence
     integer :: n
     integer, dimension(SCHED_MAX) :: time
     type(place_t), dimension(SCHED_MAX) :: place_t
@@ -107,6 +111,7 @@ module Frame
   integer, parameter :: Student  = 3
 
   type person
+    sequence
     integer :: age, gender, role
     type(place_t), allocatable, dimension(:) :: belong
     type(place_t) :: visit
@@ -118,7 +123,6 @@ module Frame
     integer :: nHealth
     type(sched) :: sched
     procedure(scheduler_t), pointer :: mkSched => NULL()
-    integer :: tid
   end type
 
   type place_vector
@@ -161,7 +165,7 @@ contains
   ! 出力: 
   !   sched_: スケジュール
   subroutine scheduler_t(person_, time, sched_)
-    class(person) :: person_ ! type(person)ではNG
+    type(person) :: person_ ! type(person)ではNG
     integer       :: time
     type(sched)   :: sched_
   end subroutine
@@ -190,7 +194,7 @@ contains
   logical function catchTrain__matchSrc(src, step, sked) result (f)
     type(mob_sched) :: sked
     integer :: src, step
-    f = sked%time .eq. step .and. sked%area_t .eq. src
+    f = sked%time .ge. step .and. sked%area_t .eq. src
   end function
 
   logical function catchTrain__matchDst(dst, step, sked) result (f)
@@ -269,12 +273,12 @@ contains
   subroutine updateHealth(city_,p)
     type(city), target, intent(inout) :: city_
     type(person), intent(inout) :: p
-    type(pTrns), pointer :: pTrns
+    type(pTrns), pointer :: pTrns_
     real(8) :: rnd
     if (p%visit%place_k .eq. PL_TRAIN) then
-      pTrns => city_%train(p%visit%id)%pl%pTrns
+      pTrns_ => city_%train(p%visit%id)%pl%pTrns
     else
-      pTrns => city_%area(p%visit%area_t)%place(p%visit%place_k)%o(p%visit%id)%pTrns
+      pTrns_ => city_%area(p%visit%area_t)%place(p%visit%place_k)%o(p%visit%id)%pTrns
     end if
 
     !if (pTrns%s2e .gt. 0) write(*,*) pTrns%s2e 
@@ -283,17 +287,17 @@ contains
     call random_number(rnd)
     select case (p%health(p%nHealth)%kind)
     case (HL_SUS)
-      if (rnd .lt. pTrns%s2e) then
+      if (rnd .lt. pTrns_%s2e) then
         p%nHealth = p%nHealth + 1
         p%health(p%nHealth) = health(HL_EXP, city_%time)
       end if
     case (HL_EXP)
-      if (rnd .lt. pTrns%e2i) then
+      if (rnd .lt. pTrns_%e2i) then
         p%nHealth = p%nHealth + 1
         p%health(p%nHealth) = health(HL_INF, city_%time)
       end if
     case (HL_INF)
-      if (rnd .lt. pTrns%i2r) then
+      if (rnd .lt. pTrns_%i2r) then
         p%nHealth = p%nHealth + 1
         p%health(p%nHealth) = health(HL_REC, city_%time)
       end if
@@ -304,16 +308,7 @@ contains
     type(city), intent(inout) :: city_
     type(person), intent(inout) :: p
     type(place_t) :: dest, tmp
-    integer :: idxTr, p_tid_back
-
-    p_tid_back = p%tid
-    !omp atomic
-    p%tid = omp_get_thread_num()
-    
-    if (p_tid_back .gt. 0 .and. p%tid .ne. p_tid_back) then
-      write(*,*) p_tid_back, p%tid
-    end if
-    
+    integer :: idxTr
 
     call p%mkSched(city_%time, p%sched)
     if (p%dest%kind .eq. NONE) then
@@ -364,8 +359,13 @@ contains
     integer :: time_today
     sch => tr%sked(tr%iSked)
     time_today = modulo(city_%time, steps_per_day)
-    if (time_today .eq. sch%time) then
+    ! 【意味上の注意】発車時刻になったら、次の停車駅にワープする。
+
+    ! 電車が走っていない適当な時間(3:00)に車庫出しする。
+    if (time_today .eq. 180)&
       tr%onService    = .true.
+
+    if (time_today .eq. sch%time) then
       tr%pl%id%area_t = sch%area_t 
       tr%iSked        = tr%iSked + 1
       if (tr%iSked .gt.  size(tr%sked)) then
@@ -447,30 +447,30 @@ contains
   contains
     subroutine addVis(p)
       type(person) :: p
-      type(nVis), pointer :: nVis
+      type(nVis), pointer :: nVis_
 
       if (p%visit%place_k .eq. PL_TRAIN) then
-        nVis => city_%train(p%visit%id)%pl%nVis
+        nVis_ => city_%train(p%visit%id)%pl%nVis
       else
-        nVis => city_%area(p%visit%area_t)%place(p%visit%place_k)%o(p%visit%id)%nVis
+        nVis_ => city_%area(p%visit%area_t)%place(p%visit%place_k)%o(p%visit%id)%nVis
       end if
 
       select case (p%health(p%nHealth)%kind)
       case (HL_SUS)
         !$omp atomic
-        nVis%s = nVis%s + 1
+        nVis_%s = nVis_%s + 1
       case (HL_EXP)
         !$omp atomic
-        nVis%e = nVis%e + 1
+        nVis_%e = nVis_%e + 1
       case (HL_INF)
         !$omp atomic
-        nVis%i = nVis%i + 1
+        nVis_%i = nVis_%i + 1
       case (HL_VAC)
         !$omp atomic
-        nVis%v = nVis%v + 1
+        nVis_%v = nVis_%v + 1
       case (HL_REC)
         !$omp atomic
-        nVis%r = nVis%r + 1
+        nVis_%r = nVis_%r + 1
       case default
         write(*,*) 'evalPlace: Undeined health state: ', p%health(p%nHealth)
       end select
@@ -497,17 +497,18 @@ contains
     !$omp end do
     !$omp barrier
 
+    !$omp do 
+      do i = 1, size(city_%train)
+        call evalTrain (city_, city_%train(i))
+      end do
+    !$omp end do
+
     !$omp master
     city_%time = city_%time + 1
     !$omp end master
     !$omp barrier
     !$omp flush
 
-    !$omp do 
-      do i = 1, size(city_%train)
-        call evalTrain (city_, city_%train(i))
-      end do
-    !$omp end do
     call evalPlace(city_)
     !$omp barrier
   end subroutine
