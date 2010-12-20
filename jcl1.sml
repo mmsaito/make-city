@@ -24,12 +24,12 @@ structure JCL1 = struct
 
 
   fun conf (infectRule:{tag:string,n:int,rule:belongSpec}) = let
-    (*                org *)
+    (*                  org *)
     val super  = 0.3 (* 0.3 *)
     val park   = 0.5 (* 0.5 *)
     val home   = 1.5 (* 1.2 *)
-    val corp   = 1.5 (* 1.5 *)
-    val school = 1.8 (* 1.8 *)
+    val corp   = 2.0 (* 1.5 *)
+    val school = 2.5 (* 1.8 *)
     val train  = 3.0 (* 3.0 *)
   in
     {betaNSuper = super  * Type.gamma
@@ -48,7 +48,7 @@ structure JCL1 = struct
   end
 
   val tasks 
-   = GenTask.dup' (14, conf 
+   = GenTask.dup' (16, conf 
         {tag = "EMP_30_JOJ_SJK"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -56,7 +56,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
-   @ GenTask.dup' (14, conf 
+   @ GenTask.dup' (16, conf 
         {tag = "EMP_30_JOJ_LOCAL"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -64,7 +64,7 @@ structure JCL1 = struct
                 ,workat = WOR_LOCAL
                 }
         })
-   @ GenTask.dup' (14, conf 
+   @ GenTask.dup' (16, conf 
         {tag = "HUS_30_JOJ_LOCAL"
         ,n    = 30
         ,rule = {role   = ROL_SOME Hausfrau
@@ -72,7 +72,7 @@ structure JCL1 = struct
                 ,workat = WOR_LOCAL
                 }
         }) 
-   @ GenTask.dup' (14, conf 
+   @ GenTask.dup' (16, conf 
         {tag = "EMP_30_HAC_SJK"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -80,7 +80,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
-   @ GenTask.dup' (14, conf 
+   @ GenTask.dup' (16, conf 
         {tag = "CRM_30_JOJ_SNJ"
         ,n    = 30
         ,rule = {role   = ROL_SOME Student
