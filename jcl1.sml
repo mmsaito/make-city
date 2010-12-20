@@ -18,19 +18,19 @@ structure JCL1 = struct
   val me    = MPI.comm_rank();
 
   (* ’S“–ƒ^ƒXƒN‚ÌŒˆ’è *)
-  val outbase = "test"
+  val outbase = "test/trial03"
   val idxTask = Int32.toInt (me + offset)
   (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
 
-
   fun conf (infectRule:{tag:string,n:int,rule:belongSpec}) = let
-    val super  = 0.3
-    val park   = 0.5
-    val home   = 1.2
-    val corp   = 1.5 
-    val school = 1.8
-    val train  = 3.0
+    (*                org *)
+    val super  = 0.3 (* 0.3 *)
+    val park   = 0.5 (* 0.5 *)
+    val home   = 1.5 (* 1.2 *)
+    val corp   = 1.5 (* 1.5 *)
+    val school = 1.8 (* 1.8 *)
+    val train  = 3.0 (* 3.0 *)
   in
     {betaNSuper = super  * Type.gamma
     ,betaNPark  = park   * Type.gamma
@@ -39,7 +39,7 @@ structure JCL1 = struct
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
     ,infectRule = infectRule
-    ,nPop       = 6000
+    ,nPop       = 3000
     ,tag        = 
       String.concatWith "_" (
         map Real.toString [super,park,home,corp,school,train])
@@ -48,41 +48,41 @@ structure JCL1 = struct
   end
 
   val tasks 
-   =  GenTask.dup' (14, conf 
-        {tag = "EMP_60_JOJ_LOCAL"
-        ,n    = 60
+   = GenTask.dup' (14, conf 
+        {tag = "EMP_30_JOJ_SJK"
+        ,n    = 30
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME JOJ
+                ,workat = WOR_SOME [(SJK,Corp)]
+                }
+        }) 
+   @ GenTask.dup' (14, conf 
+        {tag = "EMP_30_JOJ_LOCAL"
+        ,n    = 30
         ,rule = {role   = ROL_SOME Employed
                 ,livein = LIV_SOME JOJ
                 ,workat = WOR_LOCAL
                 }
         })
    @ GenTask.dup' (14, conf 
-        {tag = "HUS_60_JOJ_LOCAL"
-        ,n    = 60
+        {tag = "HUS_30_JOJ_LOCAL"
+        ,n    = 30
         ,rule = {role   = ROL_SOME Hausfrau
                 ,livein = LIV_SOME JOJ
                 ,workat = WOR_LOCAL
                 }
         }) 
    @ GenTask.dup' (14, conf 
-        {tag = "EMP_60_HAC_SJK"
-        ,n    = 60
+        {tag = "EMP_30_HAC_SJK"
+        ,n    = 30
         ,rule = {role   = ROL_SOME Employed
                 ,livein = LIV_SOME HAC
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
    @ GenTask.dup' (14, conf 
-        {tag = "EMP_60_HAC_SNJ"
-        ,n    = 60
-        ,rule = {role   = ROL_SOME Employed
-                ,livein = LIV_SOME HAC
-                ,workat = WOR_SOME [(SJK,Corp)]
-                }
-        }) 
-   @ GenTask.dup' (14, conf 
-        {tag = "CRM_60_JOJ_SNJ"
-        ,n    = 60
+        {tag = "CRM_30_JOJ_SNJ"
+        ,n    = 30
         ,rule = {role   = ROL_SOME Student
                 ,livein = LIV_SOME HAC
                 ,workat = WOR_SOME [(SJK,Cram)]

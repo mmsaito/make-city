@@ -33,7 +33,6 @@ structure Trivial = struct
     ,mcid      : string
     }
   (* 設定例 *)
-:
 
   (* テストデータ *)
   val frau = let
@@ -202,7 +201,7 @@ structure Trivial = struct
     ,nVis  = zeroNVis ()
     ,pTrns = zeroPTrns ()
     ,size  = 0 (* no longer referred *)
-    ,betaN = abs (betaN + 1.0*betaN*rgauss rnd)
+    ,betaN = abs (betaN + 0.1*betaN*rgauss rnd)
     }: place
   end
 
