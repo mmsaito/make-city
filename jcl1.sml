@@ -11,19 +11,9 @@ structure JCL1 = struct
     ; infix 1 @@
     ; infix 9 $
 
-  fun main offset = let
-  val t0 = Time.now();
-  val _ = MPI.init();
-  val nproc = MPI.comm_size();
-  val me    = MPI.comm_rank();
-
-  (* 担当タスクの決定 *)
-  val outbase = "test/trial03"
-  val idxTask = Int32.toInt (me + offset)
-  (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
-
-
-  fun conf (infectRule:{tag:string,n:int,rule:belongSpec}) = let
+  fun conf
+    ({super, park, home, corp, school, train}) 
+    (infectRule:{tag:string,n:int,rule:belongSpec}) = let
     (*                  org *)
     val super  = 0.3 (* 0.3 *)
     val park   = 0.5 (* 0.5 *)
@@ -47,8 +37,8 @@ structure JCL1 = struct
     }
   end
 
-  val tasks 
-   = GenTask.dup' (16, conf 
+  fun tasks_form n eff
+   = GenTask.dup' (n, conf eff
         {tag = "EMP_30_JOJ_SJK"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -56,7 +46,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
-   @ GenTask.dup' (16, conf 
+   @ GenTask.dup' (n, conf eff
         {tag = "EMP_30_JOJ_LOCAL"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -64,7 +54,7 @@ structure JCL1 = struct
                 ,workat = WOR_LOCAL
                 }
         })
-   @ GenTask.dup' (16, conf 
+   @ GenTask.dup' (n, conf eff
         {tag = "HUS_30_JOJ_LOCAL"
         ,n    = 30
         ,rule = {role   = ROL_SOME Hausfrau
@@ -72,7 +62,7 @@ structure JCL1 = struct
                 ,workat = WOR_LOCAL
                 }
         }) 
-   @ GenTask.dup' (16, conf 
+   @ GenTask.dup' (n, conf eff
         {tag = "EMP_30_HAC_SJK"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -80,7 +70,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
-   @ GenTask.dup' (16, conf 
+   @ GenTask.dup' (n, conf eff
         {tag = "CRM_30_JOJ_SNJ"
         ,n    = 30
         ,rule = {role   = ROL_SOME Student
@@ -88,6 +78,52 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Cram)]
                 }
         }) 
+
+  val tasks 
+    = tasks_form 12
+      {super  = 0.3
+      ,park   = 0.5 
+      ,home   = 1.5 
+      ,corp   = 2.0 
+      ,school = 2.5 
+      ,train  = 3.0
+      }
+    @ tasks_form 12
+      {super = 0.3 
+      ,park = 0.5
+      ,home = 1.2 
+      ,corp = 1.5 
+      ,school = 1.8
+      ,train = 3.0
+      }
+
+(*
+fun come_from_test ()  = let
+  val conf = List.nth(tasks, 16*1)
+  val _ = Trivial.inirnd 0
+  val city = Trivial.city conf
+  val xs = 
+    Vector.map (fn area => List.filter 
+      (fn PERSON {health,...} => case hd health of EXP _ => true | _ => false) (#2 area)
+    ) (#area city)
+  val xs = Vector.foldl (fn (a,b) => List.@ (b,a)) nil xs
+  fun corp (PERSON p) = valOf 
+    (List.find (fn {place_k,...} => place_k = Corp) (#belong p))
+in
+  (map (Frame.whereComeFromTo city o corp) xs, city)
+end
+*)
+
+fun main offset = let
+  val t0 = Time.now();
+  val _ = MPI.init();
+  val nproc = MPI.comm_size();
+  val me    = MPI.comm_rank();
+
+  (* 担当タスクの決定 *)
+  val outbase = "test/trial03"
+  val idxTask = Int32.toInt (me + offset)
+  (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
   val nTasks = length tasks
 
@@ -129,6 +165,6 @@ structure JCL1 = struct
   val t1 = Time.now();
   val () = print ("elapsed time: " ^ Time.toString (Time.-(t1,t0)) ^ "[sec]\n")
 
-  in
-    OS.Process.success
-  end end
+in
+  OS.Process.success
+end end

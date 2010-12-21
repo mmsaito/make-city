@@ -355,8 +355,7 @@ structure Frame = struct
     ) services
   end
 
-  (* 6. ’Tõ *)  
-
+  (* 6. ŒŸõ *)  
   fun matchBelongSpec ({role, livein, workat}: belongSpec) (PERSON p) = let
     val isHome = fn ({place_k = Home, ...}:place_t) => true | _ => false
     val hometown = #area_t (valOf (List.find isHome (#belong p)))
@@ -374,6 +373,28 @@ structure Frame = struct
     eqRole (role, #role p) andalso 
     eqLive (livein, hometown) andalso 
     eqWork (workat, #belong p)
+  end
+
+  (* ðŒ xx ‚ðŒ©‚½‚·lŠÔ‚ÌŠ‘®‚ð“¾‚é *)
+  fun whereComeFromTo (city:city) (target:place_t)  = let
+    val comefrom = Array.array(Vector.length (#area city), 0)
+    fun eqPlace (x:place_t) (y: place_t) = 
+      #place_k x = #place_k y andalso
+      #area_t x = #area_t y andalso
+      #id x = #id y
+    fun countUp (PERSON p) = 
+      if List.exists (eqPlace target) (#belong p) then
+        let
+          val hometown = 
+            (#area_t o valOf o List.find (fn {place_k,...} => place_k = Home)) (#belong p)
+        in
+          Array.update(comefrom, hometown, Array.sub(comefrom,hometown) + 1)
+        end
+      else
+        ()
+  in
+    (Vector.app (fn area => app countUp (#2 area)) (#area city)
+    ;Array.vector comefrom)
   end
 
 
@@ -681,6 +702,7 @@ structure Probe = struct
 
   fun getPerson (city:city) (area_t:area_t) (idx:id) = 
     List.nth(#2 (#area city $ area_t), idx)
+
 
   fun showPlace_k Cram  = "0"
     | showPlace_k Sch   = "1"

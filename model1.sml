@@ -209,8 +209,19 @@ structure Trivial = struct
     rulePlace' betaN {place_k = place_k, area_t = area_t, id = id, tVis = ref ~1}
 
   (* 行動範囲ルール *) 
-  fun ruleVisit (areas: area vector)(PERSON p: person): place_t list = let
+  fun ruleVisit (areas: area vector): person -> place_t list = let
     val rnd = getrnd()
+    val nCorp =
+      Vector.map (fn area => Vector.length (#corp (#3 area))) areas
+    val nSumCorp = Vector.foldl (op + ) 0 nCorp
+    val selCorp = let
+      val pr_area = Misc.listV 
+        (Vector.mapi (fn (i,nC) => (rI nC / rI nSumCorp, #3 (areas $ i))) nCorp)
+    in
+      fn () => rndSelV rnd (#corp (rndSelLP rnd pr_area))
+    end
+  in  
+    fn (PERSON p: person) => let
     val i0 = areaPer (PERSON p)
     val (_,_,a0) = areas $ i0
     val (_,_,a') = rndSelV rnd areas
@@ -218,7 +229,7 @@ structure Trivial = struct
     infixr 2 `::
     fun op `:: (SOME x,xs) = x :: xs
       | op `:: (NONE  ,xs) = xs
-
+ 
     fun crams() = List.filter (fn x => Vector.length x > 0) 
                    (Misc.listV (Vector.map (#cram o #3) areas))
     val selCram = rndSelLP rnd
@@ -232,9 +243,10 @@ structure Trivial = struct
     end
   in
     case #role p 
-      of Employed => map #id [rndSelV rnd (#corp a') , rndSelV rnd (#super a0)]
+      of Employed => map #id [selCorp(), rndSelV rnd (#super a0)]
        | Student  => map #id (selCram() `:: [selSch (), rndSelV rnd (#super a0)])
        | HausFrau => map #id [rndSelV rnd (#super a0), rndSelV rnd (#super a'), rndSelV rnd (#park a0) ]
+  end
   end
 
   (* 鉄道運行ルール *)
@@ -349,7 +361,7 @@ structure Trivial = struct
     )
   end
 
-  (* トップレベル関数 = C/Fortranでコマンドラインにあたる関数たち *)
+  (* トップレベル関数 *)
   (* 実装上の注意:
      動作を決める引数はいまのところ conf型としているが、じきにパラメータ数が
      多くなって手に負えなくなるので、label{X}{不完全なパラメータ}からconf型を完成される
