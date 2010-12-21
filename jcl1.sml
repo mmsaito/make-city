@@ -121,7 +121,7 @@ fun main offset = let
   val me    = MPI.comm_rank();
 
   (* ’S“–ƒ^ƒXƒN‚ÌŒˆ’è *)
-  val outbase = "test/trial03"
+  val outbase = "test/trial05"
   val idxTask = Int32.toInt (me + offset)
   (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
