@@ -13,15 +13,7 @@ structure JCL1 = struct
 
   fun conf
     ({super, park, home, corp, school, train}) 
-    (infectRule:{tag:string,n:int,rule:belongSpec}) = let
-    (*                  org *)
-    val super  = 0.3 (* 0.3 *)
-    val park   = 0.5 (* 0.5 *)
-    val home   = 1.5 (* 1.2 *)
-    val corp   = 2.0 (* 1.5 *)
-    val school = 2.5 (* 1.8 *)
-    val train  = 3.0 (* 3.0 *)
-  in
+    (infectRule:{tag:string,n:int,rule:belongSpec}) = 
     {betaNSuper = super  * Type.gamma
     ,betaNPark  = park   * Type.gamma
     ,betaNHome  = home   * Type.gamma
@@ -35,7 +27,6 @@ structure JCL1 = struct
         map Real.toString [super,park,home,corp,school,train])
     ,mcid       = "0"
     }
-  end
 
   fun tasks_form n eff
    = GenTask.dup' (n, conf eff
