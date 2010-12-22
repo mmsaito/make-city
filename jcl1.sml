@@ -21,7 +21,7 @@ structure JCL1 = struct
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
     ,infectRule = infectRule
-    ,nPop       = 3000
+    ,nPop       = 6000
     ,tag        = 
       String.concatWith "_" (
         map Real.toString [super,park,home,corp,school,train])
@@ -62,7 +62,7 @@ structure JCL1 = struct
                 }
         }) 
    @ GenTask.dup' (n, conf eff
-        {tag = "CRM_30_JOJ_SNJ"
+        {tag = "CRM_30_HAC_SNJ"
         ,n    = 30
         ,rule = {role   = ROL_SOME Student
                 ,livein = LIV_SOME HAC
@@ -70,8 +70,43 @@ structure JCL1 = struct
                 }
         }) 
 
+
+  fun tasks_form2 n eff
+   = GenTask.dup' (n, conf eff
+        {tag = "EMP_60_TKY_SJK"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME TKY
+                ,workat = WOR_SOME [(SJK,Corp)]
+                }
+        }) 
+   @ GenTask.dup' (n, conf eff
+        {tag = "EMP_60_TAC_SJK"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME TAC
+                ,workat = WOR_SOME [(SJK,Corp)]
+                }
+        }) 
+   @ GenTask.dup' (n, conf eff
+        {tag = "EMP_60_JOJ_TKY"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME JOJ
+                ,workat = WOR_SOME [(TKY,Corp)]
+                }
+        }) 
+   @ GenTask.dup' (n, conf eff
+        {tag = "EMP_60_JOJ_TAC"
+        ,n    = 60
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME JOJ
+                ,workat = WOR_SOME [(TAC,Corp)]
+                }
+        }) 
+
   val tasks 
-    = tasks_form 12
+    = tasks_form2 5
       {super  = 0.3
       ,park   = 0.5 
       ,home   = 1.5 
@@ -79,6 +114,7 @@ structure JCL1 = struct
       ,school = 2.5 
       ,train  = 3.0
       }
+    (*
     @ tasks_form 12
       {super = 0.3 
       ,park = 0.5
@@ -87,6 +123,7 @@ structure JCL1 = struct
       ,school = 1.8
       ,train = 3.0
       }
+    *)
 
 (*
 fun come_from_test ()  = let
@@ -112,7 +149,7 @@ fun main offset = let
   val me    = MPI.comm_rank();
 
   (* ’S“–ƒ^ƒXƒN‚ÌŒˆ’è *)
-  val outbase = "test/trial05"
+  val outbase = "test/trial07"
   val idxTask = Int32.toInt (me + offset)
   (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
