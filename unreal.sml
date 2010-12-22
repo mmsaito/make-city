@@ -618,14 +618,11 @@ structure Frame = struct
 
   (* ŒÂl‚ÌˆÚ“®‚ÌŒ‹‰Ê‚ðAêŠ–ˆ‚ÌlŒû‚É”½‰f‚³‚¹‚é *)
   fun evalPlace (city:city) = let
-    val {area=areas,train,time} = city
-    val vapp = Vector.app
-
     fun addVis (PERSON p:person) = let
       val nVis =
         case #visit p 
-          of {place_k = Train, id, area_t, ...} => #nVis (train $ id)
-           | others => #nVis (placeAreas areas others)
+          of {place_k = Train, id, area_t, ...} => #nVis (#train city $ id)
+           | others => #nVis (placeAreas (#area city) others)
     in
       case hd (#health p)
         of SUS   => #s nVis := !(#s nVis) + 1
@@ -635,13 +632,15 @@ structure Frame = struct
          | REC _ => #r nVis := !(#r nVis) + 1
     end
        
-    fun cntPersons ((id, persons, places):area) = 
-      ( app (fn f => vapp (fn x => clearNVis (#nVis x)) (f places)) 
-          [#sch, #corp, #park, #super, #home]
-      ; app addVis persons
-      )
+    fun clearPersons ((id, persons, places):area) = 
+      app (fn f => Vector.app (fn x => clearNVis (#nVis x)) (f places)) 
+        [#sch, #corp, #park, #super, #home]
+
+    fun countPersons ((id, persons, places):area) = 
+      app addVis persons
   in
-    (vapp cntPersons areas
+    (Vector.app clearPersons (#area city)
+    ;Vector.app countPersons (#area city)
     ;estTransit city)
   end
 

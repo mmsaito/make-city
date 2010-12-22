@@ -255,8 +255,8 @@ structure Trivial = struct
     (Vector.fromList o List.concat) 
     (map (fn h => 
       List.concat (map (fn m =>
-       [ {deptime = 60*h + m, stations = #[TKY, SJK, JOJ, TAC, HAC]} 
-       , {deptime = 60*h + m, stations = #[HAC, TAC, JOJ, SJK, TKY]} 
+       [ {deptime = iR (rI h*hours + rI m*minutes), stations = #[TKY, SJK, JOJ, TAC, HAC]} 
+       , {deptime = iR (rI h*hours + rI m*minutes), stations = #[HAC, TAC, JOJ, SJK, TKY]} 
        ]) [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
      ) [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23])
 
