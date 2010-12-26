@@ -50,6 +50,9 @@ structure GenTask = struct
     ,infectRule = #infectRule x
     ,nPop       = #nPop x
     ,tag        = #tag x    
+    ,vacEff     = #vacEff x
+    ,vacTrCover = #vacTrCover x
+    ,vacSchCover= #vacSchCover x
     ,mcid       = Int.toString mcid
     }: Trivial.conf
   in

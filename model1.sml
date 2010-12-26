@@ -21,18 +21,20 @@ structure Trivial = struct
          る流動的なものである) だけをconfに書くことにする。
    *)
   type conf = 
-    {betaNHome : real
-    ,betaNSch  : real
-    ,betaNSuper: real
-    ,betaNCorp : real
-    ,betaNPark : real
-    ,betaNTrain: real
-    ,infectRule: {tag:string, n:int, rule:belongSpec}
-    ,nPop      : int (* ひとつの街の人口。後で配列にする *)
-    ,tag       : string
-    ,mcid      : string
+    {betaNHome  : real
+    ,betaNSch   : real
+    ,betaNSuper : real
+    ,betaNCorp  : real
+    ,betaNPark  : real
+    ,betaNTrain : real
+    ,infectRule : {tag:string, n:int, rule:belongSpec}
+    ,nPop       : int (* ひとつの街の人口。後で配列にする *)
+    ,vacEff     : real (* ワクチン効果 *)
+    ,vacTrCover : real (* 接種実施率 *)
+    ,vacSchCover: real (* 接種実施率 *)
+    ,tag        : string
+    ,mcid       : string
     }
-  (* 設定例 *)
 
   (* テストデータ *)
   val frau = let
@@ -324,15 +326,20 @@ structure Trivial = struct
 
   fun train (conf:conf) = F.makeTrains 
     {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
-
+(*
   val infect_rule1: area -> area =  
     F.ruleInfect 5 {role = ROL_SOME Employed, livein = LIV_SOME JOJ, workat = WOR_SOME [(2,Corp)]}
+*)
 
   fun city (conf:conf) =  let
+    val () = F.setVacEff (#vacEff conf)
+    val vac: area -> area =
+      F.vacWho (fn p => F.ruleVacTrain  (#vacTrCover  conf) p orelse 
+                        F.ruleVacSchool (#vacSchCover conf) p)
     val infect = F.ruleInfect (#n (#infectRule conf)) (#rule (#infectRule conf))
   in
     F.evalPlace
-      {area  = Vector.map infect (F.makeVisit' (area conf) ruleVisit)
+      {area  = Vector.map (infect o vac) (F.makeVisit' (area conf) ruleVisit)
       ,train = train conf
       ,time = 0
       }
@@ -362,11 +369,6 @@ structure Trivial = struct
   end
 
   (* トップレベル関数 *)
-  (* 実装上の注意:
-     動作を決める引数はいまのところ conf型としているが、じきにパラメータ数が
-     多くなって手に負えなくなるので、label{X}{不完全なパラメータ}からconf型を完成される
-     ルーチンを書いて、ref{X}を引数にとるようにせよ。
-   *)
   fun run1 {conf, recstep, tStop, dir, tag, city} = let
     val () = writeConf conf (dir^"/conf_"^ tag^".csv")
     val os = T.openOut      (dir^"/pop_" ^ tag^".csv")

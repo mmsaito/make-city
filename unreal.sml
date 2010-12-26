@@ -194,6 +194,14 @@ structure Type = struct
     fun inirnd n = rndref := SOME (Random.rand(0,n))
   end
 
+  (* ワクチン効率の設定 *)
+  local
+    val vacEff__ = ref NONE: real option ref
+  in
+    fun getVacEff() = valOf (!vacEff__)
+    fun setVacEff x = vacEff__ := SOME x
+  end
+
   (* 行動パターンによる検索に使う型 *)
   datatype roleOpt   = ROL_ARBIT | ROL_SOME of role
   datatype liveinOpt = LIV_ARBIT | LIV_SOME of area_t  (* for livein *)
@@ -397,7 +405,6 @@ structure Frame = struct
     ;Array.vector comefrom)
   end
 
-
   (* 7. 感染者のばらまき *)
   (* (1) distInfect:
    *  area 内で
@@ -458,6 +465,38 @@ structure Frame = struct
     (#1 area, map setExposedIf (#2 area),#3 area): area
   end
 
+  (* 8. ワクチン接種 *)
+  fun vacWho (rule:person -> bool)(area:area): area = let
+    val per = #2 area
+    fun set (PERSON p:person) =
+      PERSON { age    = #age p
+             , gender = #gender p
+             , role   = #role p
+             , belong = #belong p
+             , visit  = #visit p
+             , dest   = #dest p
+             , health = [VAC 0]
+             , mkSched= #mkSched p
+             , sched  = #sched p }
+    fun set_if p = if rule p then set p else p
+  in
+    (#1 area, map set_if (#2 area), #3 area)
+  end
+
+  (* 電車に乗る人に接種 *)
+  fun ruleVacTrain (cover:real)(PERSON p) = let
+    val rnd    = getrnd()
+    val isHome = fn ({place_k = Home, ...}:place_t) => true | _ => false
+    val hometown = #area_t (valOf (List.find isHome (#belong p)))
+  in
+      List.exists (fn ({area_t,...}:place_t) => area_t <> hometown) (#belong p)
+      andalso rndSel rnd cover (true,false)
+  end
+
+  (* 学生に接種 *)
+  fun ruleVacSchool (cover:real)(PERSON p) = 
+    #role p = Student andalso rndSel (getrnd()) cover (true,false)
+
   (* ============================================================== *)
   (* シミュレーションエンジン *)
   fun catchTrain (train:mobil vector, now:time, src:area_t, dst:area_t): mobil option = let
@@ -482,17 +521,22 @@ structure Frame = struct
 *)
   (* いま居る場所の感染効率から確率過程により健康状態を遷移させる *)
   fun updateHealth ({area=areas,train,time}:city) (PERSON p: person): health list = let
-    val rnd = getrnd()
+    val rnd    = getrnd()
     val pTrns =
       case #visit p 
         of {place_k = Train, id, ...} => #pTrns (train $ id)
          | place_t                    => #pTrns (placeAreas areas place_t)
     val cur::hist = #health p
+    fun redu_s2e() = 
+      if List.exists (fn VAC _ => true | _ => false) (#health p) then
+        #s2e pTrns * (1.0 - getVacEff())
+      else
+        #s2e pTrns
   in
     (* 注: 履歴のとり方に注意。
      * rndSel rnd (#s2e pTrns) (EXP time, cur) :: cur :: hist ではない!! *)
     case cur
-      of SUS   => rndSel rnd (#s2e pTrns) ([EXP time, cur],[cur]) @ hist
+      of SUS   => rndSel rnd (redu_s2e()) ([EXP time, cur],[cur]) @ hist
        | EXP _ => rndSel rnd (#e2i pTrns) ([INF time, cur],[cur]) @ hist
        | INF _ => rndSel rnd (#i2r pTrns) ([REC time, cur],[cur]) @ hist
        | _     => cur :: hist

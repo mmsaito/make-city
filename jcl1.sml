@@ -11,25 +11,33 @@ structure JCL1 = struct
     ; infix 1 @@
     ; infix 9 $
 
+  val novac = {vacEff = 0.0, vacTrCover = 0.0, vacSchCover = 0.0}
+
   fun conf
-    ({super, park, home, corp, school, train}) 
-    (infectRule:{tag:string,n:int,rule:belongSpec}) = 
-    {betaNSuper = super  * Type.gamma
+    ({super, park, home, corp, school, train})
+    ({vacEff:real, vacTrCover:real, vacSchCover:real})
+    (infectRule:{tag:string,n:int,rule:belongSpec})
+  = {betaNSuper = super  * Type.gamma
     ,betaNPark  = park   * Type.gamma
     ,betaNHome  = home   * Type.gamma
     ,betaNCorp  = corp   * Type.gamma
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
     ,infectRule = infectRule
-    ,nPop       = 6000
+    ,vacEff     = vacEff
+    ,vacTrCover = vacTrCover
+    ,vacSchCover= vacSchCover
+    ,nPop       = 3000
     ,tag        = 
-      String.concatWith "_" (
-        map Real.toString [super,park,home,corp,school,train])
+      String.concatWith "_" 
+        ( map Real.toString [super,park,home,corp,school,train]
+        @ [#tag infectRule]
+        @ map Real.toString [vacEff,vacTrCover,vacSchCover])
     ,mcid       = "0"
-    }
+    }: Trivial.conf
 
-  fun tasks_form n eff
-   = GenTask.dup' (n, conf eff
+  fun tasks_form n eff vac
+   = GenTask.dup' (n, conf eff vac
         {tag = "EMP_30_JOJ_SJK"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -37,7 +45,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
-   @ GenTask.dup' (n, conf eff
+   @ GenTask.dup' (n, conf eff vac
         {tag = "EMP_30_JOJ_LOCAL"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -45,7 +53,7 @@ structure JCL1 = struct
                 ,workat = WOR_LOCAL
                 }
         })
-   @ GenTask.dup' (n, conf eff
+   @ GenTask.dup' (n, conf eff vac
         {tag = "HUS_30_JOJ_LOCAL"
         ,n    = 30
         ,rule = {role   = ROL_SOME Hausfrau
@@ -53,7 +61,7 @@ structure JCL1 = struct
                 ,workat = WOR_LOCAL
                 }
         }) 
-   @ GenTask.dup' (n, conf eff
+   @ GenTask.dup' (n, conf eff vac
         {tag = "EMP_30_HAC_SJK"
         ,n    = 30
         ,rule = {role   = ROL_SOME Employed
@@ -61,7 +69,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
-   @ GenTask.dup' (n, conf eff
+   @ GenTask.dup' (n, conf eff vac
         {tag = "CRM_30_HAC_SNJ"
         ,n    = 30
         ,rule = {role   = ROL_SOME Student
@@ -70,9 +78,8 @@ structure JCL1 = struct
                 }
         }) 
 
-
-  fun tasks_form2 n eff
-   = GenTask.dup' (n, conf eff
+  fun tasks_form2 n eff vac
+   = GenTask.dup' (n, conf eff vac
         {tag = "EMP_60_TKY_SJK"
         ,n    = 60
         ,rule = {role   = ROL_SOME Employed
@@ -80,7 +87,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
-   @ GenTask.dup' (n, conf eff
+   @ GenTask.dup' (n, conf eff vac
         {tag = "EMP_60_TAC_SJK"
         ,n    = 60
         ,rule = {role   = ROL_SOME Employed
@@ -88,7 +95,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         }) 
-   @ GenTask.dup' (n, conf eff
+   @ GenTask.dup' (n, conf eff vac
         {tag = "EMP_60_JOJ_TKY"
         ,n    = 60
         ,rule = {role   = ROL_SOME Employed
@@ -96,7 +103,7 @@ structure JCL1 = struct
                 ,workat = WOR_SOME [(TKY,Corp)]
                 }
         }) 
-   @ GenTask.dup' (n, conf eff
+   @ GenTask.dup' (n, conf eff vac
         {tag = "EMP_60_JOJ_TAC"
         ,n    = 60
         ,rule = {role   = ROL_SOME Employed
@@ -105,25 +112,20 @@ structure JCL1 = struct
                 }
         }) 
 
-  val tasks 
-    = tasks_form2 5
-      {super  = 0.3
-      ,park   = 0.5 
-      ,home   = 1.5 
-      ,corp   = 2.0 
-      ,school = 2.5 
-      ,train  = 3.0
-      }
-    (*
-    @ tasks_form 12
-      {super = 0.3 
-      ,park = 0.5
-      ,home = 1.2 
-      ,corp = 1.5 
-      ,school = 1.8
-      ,train = 3.0
-      }
-    *)
+  val eff3 = {super = 0.3, park = 0.5, home = 1.5, corp = 4.0, school = 5.0,train = 6.0}
+
+ 
+  fun tasks_form3 vac = hd (tasks_form 1 eff3 vac)
+
+  fun mapConcat f = List.concat o map f
+  val tasks: Trivial.conf list = 
+     mapConcat (fn vacCover =>
+       mapConcat (fn vacEff =>
+          [tasks_form3 {vacEff = vacEff, vacTrCover = vacCover, vacSchCover = 0.0}
+          ,tasks_form3 {vacEff = vacEff, vacTrCover = 0.0, vacSchCover = vacCover}
+          ]
+       ) [0.1, 0.3, 0.5]
+     ) [0.5, 0.6, 0.7, 0.8, 1.0]
 
 (*
 fun come_from_test ()  = let
@@ -149,7 +151,7 @@ fun main offset = let
   val me    = MPI.comm_rank();
 
   (* 担当タスクの決定 *)
-  val outbase = "test/trial07"
+  val outbase = "test/trial01"
   val idxTask = Int32.toInt (me + offset)
   (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
@@ -158,8 +160,8 @@ fun main offset = let
   val _ = 
     if idxTask < nTasks then
       let
-        val conf    = List.nth(tasks, idxTask)
-        val tagbase = #tag conf ^ "_" ^ #tag (#infectRule conf)
+        val conf     = List.nth(tasks, idxTask)
+        val tagbase  = #tag conf 
         val tag      = #tag conf ^ "@" ^ #mcid conf
         val _ = MPI.barrier MPI.COMM_WORLD
         val _ = 
@@ -168,18 +170,18 @@ fun main offset = let
             else ()
         val _ = MPI.barrier MPI.COMM_WORLD
 
-         (* 判断がむつかしいが、まちを構成するまでは共通の乱数列を使う *)
+       (* まちを構成するまでは共通の乱数列を使う *)
         val _ = Trivial.inirnd 0;
         val city = Trivial.city conf;
 
         val tStop = 360*Type.days';
 
-        (* シミュレーション中はランク毎に違う乱数列を使う *)
-        val _ = Trivial.inirnd idxTask
+       (* シミュレーション中はMonte Carlo実験毎に違う乱数列を使う *)
+        val _ = Trivial.inirnd (Alice.iS (#mcid conf))
       in
         ignore (
           Trivial.run1 {conf=conf, recstep=180, tStop=tStop, tag=tag
-                       , dir=outbase^"/"^tagbase, city=city}
+                       ,dir=outbase^"/"^tagbase, city=city}
         )
       end
     else
