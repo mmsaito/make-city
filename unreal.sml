@@ -484,17 +484,19 @@ structure Frame = struct
   end
 
   (* “dŽÔ‚Éæ‚él‚ÉÚŽí *)
-  fun ruleVacTrain (cover:real)(PERSON p) = let
+  fun ruleVacTrain {cover:real, eff:real} (PERSON p) = let
     val rnd    = getrnd()
+    val pr = cover * eff
+    val _ = print (sR pr ^ ",")
     val isHome = fn ({place_k = Home, ...}:place_t) => true | _ => false
     val hometown = #area_t (valOf (List.find isHome (#belong p)))
   in
       List.exists (fn ({area_t,...}:place_t) => area_t <> hometown) (#belong p)
-      andalso rndSel rnd cover (true,false)
+      andalso rndSel rnd pr (true,false)
   end
 
   (* Šw¶‚ÉÚŽí *)
-  fun ruleVacSchool (cover:real)(PERSON p) = 
+  fun ruleVacSchool {cover:real, eff:real} (PERSON p) = 
     #role p = Student andalso rndSel (getrnd()) cover (true,false)
 
   (* ============================================================== *)
@@ -529,7 +531,7 @@ structure Frame = struct
     val cur::hist = #health p
     fun redu_s2e() = 
       if List.exists (fn VAC _ => true | _ => false) (#health p) then
-        #s2e pTrns * (1.0 - getVacEff())
+        0.0
       else
         #s2e pTrns
   in

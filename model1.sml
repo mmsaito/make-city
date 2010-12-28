@@ -330,12 +330,11 @@ structure Trivial = struct
   val infect_rule1: area -> area =  
     F.ruleInfect 5 {role = ROL_SOME Employed, livein = LIV_SOME JOJ, workat = WOR_SOME [(2,Corp)]}
 *)
-
   fun city (conf:conf) =  let
     val () = F.setVacEff (#vacEff conf)
     val vac: area -> area =
-      F.vacWho (fn p => F.ruleVacTrain  (#vacTrCover  conf) p orelse 
-                        F.ruleVacSchool (#vacSchCover conf) p)
+      F.vacWho (fn p => F.ruleVacTrain  {cover = #vacTrCover conf , eff = #vacEff conf} p orelse 
+                        F.ruleVacSchool {cover = #vacSchCover conf, eff = #vacEff conf} p)
     val infect = F.ruleInfect (#n (#infectRule conf)) (#rule (#infectRule conf))
   in
     F.evalPlace
@@ -344,7 +343,6 @@ structure Trivial = struct
       ,time = 0
       }
   end
-
   (* 3000人 、1日で、45[sec] 
      150万人、1日で、6.25[時間]    (実スケール)
      15万人 、1日で、37.5[分]      (1/10スケール)

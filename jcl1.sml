@@ -151,7 +151,7 @@ fun main offset = let
   val me    = MPI.comm_rank();
 
   (* ’S“–ƒ^ƒXƒN‚ÌŒˆ’è *)
-  val outbase = "test/trial01"
+  val outbase = "test/trial01b"
   val idxTask = Int32.toInt (me + offset)
   (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
@@ -166,7 +166,7 @@ fun main offset = let
         val _ = MPI.barrier MPI.COMM_WORLD
         val _ = 
           if valOf (Int.fromString (#mcid conf)) = 0
-            then OS.FileSys.mkDir (outbase^"/"^tagbase) handle _ => () 
+            then X_Misc.mkDir (outbase^"/"^tagbase) handle _ => () 
             else ()
         val _ = MPI.barrier MPI.COMM_WORLD
 
