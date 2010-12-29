@@ -66,16 +66,18 @@ atripplot <- function(mat,n)
 }
 
 
-pop_sum_plot1 <- function(x,offset,ylab,maxday,conf)
+pop_sum_plot1 <- function(x,offset,ylab,maxday,conf,maxE)
 {
     t <- x[,1]/1440
     e <- apply(x[,4*(0:4)+offset], 1, sum)
 
-    plot(t,e,main="e",type="l", xlim=c(0,maxday),ylim=c(0,1.5*max(e)),ylab=ylab,xlab="time [days]",lty=1,lwd=2)
-    #legend(maxday*0.8,1.5*max(e),c("”ª‰¤Žq","—§ì","‹gËŽ›","Vh","“Œ‹ž"),lty=1,lwd=2,col=1:5)
-    #if (!missing(conf)) {
-    #    legend(0,1.5*max(e), paste(names(conf), conf))
-    #}
+    if (missing(maxE)) {
+      maxE_ = max(e)
+    } else {
+      maxE_ = maxE
+    }
+
+    plot(t,e,main="e",type="l", xlim=c(0,maxday),ylim=c(0,1.5*maxE_),ylab=ylab,xlab="time [days]",lty=1,lwd=2)
 }
 
 
@@ -83,6 +85,7 @@ popplot1 <- function(x,offset,ylab,maxday,conf,maxE)
 {
     t <- matrix(rep(x[,1]/1440,5), ncol=5)
     e <- x[,4*(0:4)+offset]
+
     #cat(max(e))
 
     if (missing(maxE)) {
@@ -129,13 +132,23 @@ popplot <- function(x,maxday,conf,tag,toFile,maxE)
         Map(dev.off, dv)
     }
 
-    png(paste("R_SUM_",tag,".png",sep=""))
-    pop_sum_plot1(x,5,"R",maxday,conf)
-    dev.off()
+    if (missing(maxE)) {
+      png(paste("R_SUM_",tag,".png",sep=""))
+      pop_sum_plot1(x,5,"R",maxday,conf)
+      dev.off()
 
-    png(paste("E_SUM_",tag,".png",sep=""))
-    pop_sum_plot1(x,3,"E",maxday,conf)
-    dev.off()
+      png(paste("E_SUM_",tag,".png",sep=""))
+      pop_sum_plot1(x,3,"E",maxday,conf)
+      dev.off()
+    } else {
+      png(paste("R_SUM_",tag,".png",sep=""))
+      pop_sum_plot1(x,5,"R",maxday,conf,maxE*5)
+      dev.off()
+
+      png(paste("E_SUM_",tag,".png",sep=""))
+      pop_sum_plot1(x,3,"E",maxday,conf,maxE*5)
+      dev.off()
+   }
 }
 
 popplotf <- function(tag,maxday)
