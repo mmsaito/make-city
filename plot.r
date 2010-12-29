@@ -79,19 +79,26 @@ pop_sum_plot1 <- function(x,offset,ylab,maxday,conf)
 }
 
 
-popplot1 <- function(x,offset,ylab,maxday,conf)
+popplot1 <- function(x,offset,ylab,maxday,conf,maxE)
 {
     t <- matrix(rep(x[,1]/1440,5), ncol=5)
     e <- x[,4*(0:4)+offset]
     #cat(max(e))
-    matplot(t,e,main="e",type="l", xlim=c(0,maxday),ylim=c(0,1.5*max(e)),ylab=ylab,xlab="time [days]",lty=1,lwd=2)
+
+    if (missing(maxE)) {
+      maxE_ = max(e)
+    } else {
+      maxE_ = maxE
+    }
+
+    matplot(t,e,main="e",type="l", xlim=c(0,maxday),ylim=c(0,1.5*maxE_),ylab=ylab,xlab="time [days]",lty=1,lwd=2)
     legend(maxday*0.8,1.5*max(e),c("八王子","立川","吉祥寺","新宿","東京"),lty=1,lwd=2,col=1:5)
     if (!missing(conf)) {
         legend(0,1.5*max(e), paste(names(conf), conf))
     }
 }
 
-popplot <- function(x,maxday,conf,tag,toFile)
+popplot <- function(x,maxday,conf,tag,toFile,maxE)
 {
     nuse = 2
     if (missing(toFile) || !toFile) {
@@ -115,7 +122,7 @@ popplot <- function(x,maxday,conf,tag,toFile)
     if   (!missing(tag) && !toFile) {savePlot(file = paste("R_",tag,".png",sep=""), type="png")}
 
     dev.set(dv[2])  
-    popplot1(x,3,"E",maxday,conf)
+    popplot1(x,3,"E",maxday,conf,maxE)
     if (!missing(tag) && !toFile) {savePlot(file = paste("E_",tag,".png",sep=""), type="png")}
     
     if (!(missing(toFile) || !toFile)) {
@@ -139,7 +146,7 @@ popplotf <- function(tag,maxday)
 }
 
 # tag = フォルダ名として、これを使え!!
-popplotd <- function(tag,maxday)
+popplotd <- function(tag,maxday,maxE)
 {
    pwd <- getwd()
    setwd(tag)
@@ -149,7 +156,7 @@ popplotd <- function(tag,maxday)
          x    <- read.csv(popf)
          conf <- read.csv(sub("pop","conf", popf),row.name=1,header=F)
          tag  <- sub(".csv","", sub("pop_", "", popf))
-         popplot(x,maxday,confcnv(conf),tag,TRUE)
+         popplot(x,maxday,confcnv(conf),tag,TRUE,maxE)
        }
      , popfiles)
 

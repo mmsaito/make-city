@@ -497,7 +497,7 @@ structure Frame = struct
 
   (* 学生に接種 *)
   fun ruleVacSchool {cover:real, eff:real} (PERSON p) = 
-    #role p = Student andalso rndSel (getrnd()) cover (true,false)
+    #role p = Student andalso rndSel (getrnd()) (cover*eff) (true,false)
 
   (* ============================================================== *)
   (* シミュレーションエンジン *)
