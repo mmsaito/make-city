@@ -136,7 +136,7 @@ structure JCL1 = struct
 *)
   val tasks =
     GenTask.dup' (16384, conf' eff4 novac
-        {tag  = "EMP_30_JOJ_SJK"
+        {tag  = "ARBIT_30_JOJ_ARBIT"
         ,n    = 30
         ,rule = {role   = ROL_ARBIT (* ignored *)
                 ,livein = LIV_SOME JOJ
