@@ -19,7 +19,7 @@ structure Trivial = struct
        - モデルに出てくる数値パラメータをconfに置くことにすると、作業がしにくくなる。
        - そこで、パラメータ探索の対象となるもの(これは、研究の進行とともに変化す
          る流動的なものである) だけをconfに書くことにする。
-   *)
+  *)
   type conf = 
     {betaNHome  : real
     ,betaNSch   : real
@@ -27,7 +27,7 @@ structure Trivial = struct
     ,betaNCorp  : real
     ,betaNPark  : real
     ,betaNTrain : real
-    ,infectRule : {tag:string, n:int, rule:belongSpec}
+    ,infectRule : {tag:string, n:int, rule:belongSpec, isRandom:bool}
     ,nPop       : int (* ひとつの街の人口。後で配列にする *)
     ,vacEff     : real (* ワクチン効果 *)
     ,vacTrCover : real (* 接種実施率 *)
@@ -259,7 +259,8 @@ structure Trivial = struct
       List.concat (map (fn m =>
        [ {deptime = iR (rI h*hours + rI m*minutes), stations = #[TKY, SJK, JOJ, TAC, HAC]} 
        , {deptime = iR (rI h*hours + rI m*minutes), stations = #[HAC, TAC, JOJ, SJK, TKY]} 
-       ]) [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
+       ]) [0, 20, 40]) 
+          (* [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]) *)
      ) [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23])
 
   (* 学校数,会社数の表 *)
@@ -332,15 +333,31 @@ structure Trivial = struct
 *)
   fun city (conf:conf) =  let
     val () = F.setVacEff (#vacEff conf)
+    val rnd = getrnd()
     val vac: area -> area =
-      F.vacWho (fn p => F.ruleVacTrain  {cover = #vacTrCover conf , eff = #vacEff conf} p orelse 
+      F.vacWho (fn p => F.ruleVacTrain  {cover = #vacTrCover  conf, eff = #vacEff conf} p orelse 
                         F.ruleVacSchool {cover = #vacSchCover conf, eff = #vacEff conf} p)
-    val infect = F.ruleInfect (#n (#infectRule conf)) (#rule (#infectRule conf))
+    val nInf = #n (#infectRule conf)
+    val rule = #rule (#infectRule conf)
+    (* 注意: ここの抽出方法の違い(決定的/ランダム)の対応は、非常に場当たり的なものである *)
+    fun infect (area:area) = 
+      case #isRandom (#infectRule conf)
+        of false => F.ruleInfect nInf rule area
+         | true  =>
+            (case #livein rule
+               of LIV_SOME area_t =>
+                 if area_t = idArea area 
+                   then F.distInfect rnd [(nInf,INF 0)] area
+                   else area
+                | LIV_ARBIT =>
+                   F.distInfect rnd [(nInf div 5, INF 0)] area
+                   (* マジックナンバー 5 = 都市数 *)
+            )
   in
     F.evalPlace
       {area  = Vector.map (infect o vac) (F.makeVisit' (area conf) ruleVisit)
       ,train = train conf
-      ,time = 0
+      ,time  = 0
       }
   end
   (* 3000人 、1日で、45[sec] 

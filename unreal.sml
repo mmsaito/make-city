@@ -158,6 +158,10 @@ structure Type = struct
       }
  (* ToDo: どこかで #id area = index of vector を保証しないといけない *)
   type area = id * person list * places
+    (* タプルではなく、レコードにすべきだった *)
+    val idArea    = #1: area -> id
+    val popArea   = #2: area -> person list
+    val placeArea = #3: area -> places
   type city =
     {area : area vector  
     ,train: mobil vector
@@ -409,7 +413,7 @@ structure Frame = struct
   (* (1) distInfect:
    *  area 内で
    *  重複しないようにランダムに指定個を選び出し、指定された健康状態にする *)
-  fun distInfect rnd (area:area) (rules: (size * health) list): area = let
+  fun distInfect rnd (rules: (size * health) list) (area:area): area = let
     val per = #2 area
     val (modified, rest) = 
       foldl (fn ((n,stat),(modified, per)) => 
@@ -487,7 +491,6 @@ structure Frame = struct
   fun ruleVacTrain {cover:real, eff:real} (PERSON p) = let
     val rnd    = getrnd()
     val pr = cover * eff
-    val _ = print (sR pr ^ ",")
     val isHome = fn ({place_k = Home, ...}:place_t) => true | _ => false
     val hometown = #area_t (valOf (List.find isHome (#belong p)))
   in

@@ -83,10 +83,12 @@ pop_sum_plot1 <- function(x,offset,ylab,maxday,conf,maxE)
 
 popplot1 <- function(x,offset,ylab,maxday,conf,maxE)
 {
-    t <- matrix(rep(x[,1]/1440,5), ncol=5)
-    e <- x[,4*(0:4)+offset]
+    t <- matrix(rep(x[,1]/1440,6), ncol=6)
+    e <- matrix(nrow=nrow(x), ncol=6)
 
-    #cat(max(e))
+
+    e[,2:6] <- as.matrix(x[,4*(0:4)+offset])
+    e[,1  ] <- apply(x[,4*(0:4)+offset]/2, 1, sum)
 
     if (missing(maxE)) {
       maxE_ = max(e)
@@ -94,10 +96,30 @@ popplot1 <- function(x,offset,ylab,maxday,conf,maxE)
       maxE_ = maxE
     }
 
-    matplot(t,e,main="e",type="l", xlim=c(0,maxday),ylim=c(0,1.5*maxE_),ylab=ylab,xlab="time [days]",lty=1,lwd=2)
-    legend(maxday*0.8,1.5*max(e),c("”ª‰¤Žq","—§ì","‹gËŽ›","Vh","“Œ‹ž"),lty=1,lwd=2,col=1:5)
+           col<-c(rgb(108/256,96/256,96/256)
+                 ,rgb(237/256,26/256,61/256)
+                 ,rgb(32/256,96/256,64/256)
+                 ,rgb(64/256,32/256,240/256)
+                 ,rgb(32/256,192/256,144/256)
+                 ,rgb(240/256,64/256,220/256)
+                 ,rgb(108/256,96/256,96/256)
+                 )
+
+
+    matplot(t,e,main="e",type="l", xlim=c(0,maxday),ylim=c(0,1.5*maxE_),ylab=ylab,xlab="time [days]"
+           ,lty=1
+           ,lwd=c(3,2,2,2,2,2)
+           ,col=col
+           )
+    legend(maxday*0.8 
+          ,1.5*maxE_
+          ,c("”ª‰¤Žq","—§ì","‹gËŽ›","Vh","“Œ‹ž","‡Œv/2")
+          ,lty=1
+          ,lwd=c(2,2,2,2,2,2)
+          ,col=col
+          )
     if (!missing(conf)) {
-        legend(0,1.5*max(e), paste(names(conf), conf))
+        legend(maxday*0.69,1.0*maxE_, paste(names(conf), conf))
     }
 }
 
@@ -132,23 +154,23 @@ popplot <- function(x,maxday,conf,tag,toFile,maxE)
         Map(dev.off, dv)
     }
 
-    if (missing(maxE)) {
-      png(paste("R_SUM_",tag,".png",sep=""))
-      pop_sum_plot1(x,5,"R",maxday,conf)
-      dev.off()
-
-      png(paste("E_SUM_",tag,".png",sep=""))
-      pop_sum_plot1(x,3,"E",maxday,conf)
-      dev.off()
-    } else {
-      png(paste("R_SUM_",tag,".png",sep=""))
-      pop_sum_plot1(x,5,"R",maxday,conf,maxE*5)
-      dev.off()
-
-      png(paste("E_SUM_",tag,".png",sep=""))
-      pop_sum_plot1(x,3,"E",maxday,conf,maxE*5)
-      dev.off()
-   }
+#    if (missing(maxE)) {
+#      png(paste("R_SUM_",tag,".png",sep=""))
+#      pop_sum_plot1(x,5,"R",maxday,conf)
+#      dev.off()
+#
+#      png(paste("E_SUM_",tag,".png",sep=""))
+#      pop_sum_plot1(x,3,"E",maxday,conf)
+#      dev.off()
+#    } else {
+#      png(paste("R_SUM_",tag,".png",sep=""))
+#      pop_sum_plot1(x,5,"R",maxday,conf,maxE*5)
+#      dev.off()
+#
+#      png(paste("E_SUM_",tag,".png",sep=""))
+#      pop_sum_plot1(x,3,"E",maxday,conf,maxE*5)
+#      dev.off()
+#   }
 }
 
 popplotf <- function(tag,maxday)

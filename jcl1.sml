@@ -4,6 +4,10 @@ structure JCL1 = struct
   fun echoOn () = Control.Print.out := {flush = Control.Print.flush, say = Control.Print.say} ;
   *)
 
+(* ワクチンがかかったひと
+ Vector.map (fn area => List.filter (fn PERSON p => List.exists (fn VAC _ => true | _ => false) (#health p)) (popArea area))  (#area city) ;
+ *)
+
   structure M = MPI.Marshall;
   structure U = MPI.Unmarshall;
 
@@ -13,10 +17,10 @@ structure JCL1 = struct
 
   val novac = {vacEff = 0.0, vacTrCover = 0.0, vacSchCover = 0.0}
 
-  fun conf
+  fun conf'
     ({super, park, home, corp, school, train})
     ({vacEff:real, vacTrCover:real, vacSchCover:real})
-    (infectRule:{tag:string,n:int,rule:belongSpec})
+    (infectRule:{tag:string,n:int,rule:belongSpec, isRandom:bool})
   = {betaNSuper = super  * Type.gamma
     ,betaNPark  = park   * Type.gamma
     ,betaNHome  = home   * Type.gamma
@@ -35,6 +39,8 @@ structure JCL1 = struct
         @ map Real.toString [vacEff,vacTrCover,vacSchCover])
     ,mcid       = "0"
     }: Trivial.conf
+
+  fun conf a b {tag,n,rule} = conf' a b {tag = tag, n = n, rule = rule, isRandom= false}
 
   fun tasks_form n eff vac
    = GenTask.dup' (n, conf eff vac
@@ -113,20 +119,31 @@ structure JCL1 = struct
         }) 
 
   val eff3 = {super = 0.3, park = 0.5, home = 1.5, corp = 4.0, school = 5.0,train = 6.0}
+  val eff4 = {super = 0.3, park = 0.5, home = 1.5, corp = 3.0, school = 4.0,train = 6.0}
 
  
-  fun tasks_form3 vac = hd (tasks_form 1 eff3 vac)
-
+  fun tasks_form3 vac = hd (tasks_form 1 eff4 vac)
+(*
   fun mapConcat f = List.concat o map f
   val tasks: Trivial.conf list = 
      mapConcat (fn vacCover =>
        mapConcat (fn vacEff =>
-          [tasks_form3 {vacEff = vacEff, vacTrCover = vacCover, vacSchCover = 0.0}
-          ,tasks_form3 {vacEff = vacEff, vacTrCover = 0.0, vacSchCover = vacCover}
+          [tasks_form3 {vacEff = vacEff, vacTrCover = vacCover, vacSchCover = 0.0     }
+          ,tasks_form3 {vacEff = vacEff, vacTrCover = 0.0     , vacSchCover = vacCover}
           ]
        ) [0.1, 0.3, 0.5]
      ) [0.5, 0.6, 0.7, 0.8, 1.0]
-
+*)
+  val tasks =
+    GenTask.dup' (16384, conf' eff4 novac
+        {tag  = "EMP_30_JOJ_SJK"
+        ,n    = 30
+        ,rule = {role   = ROL_ARBIT (* ignored *)
+                ,livein = LIV_SOME JOJ
+                ,workat = WOR_ARBIT (* ignored *)
+                }:belongSpec
+        ,isRandom = true
+        }) 
 (*
 fun come_from_test ()  = let
   val conf = List.nth(tasks, 16*1)
@@ -151,7 +168,7 @@ fun main offset = let
   val me    = MPI.comm_rank();
 
   (* 担当タスクの決定 *)
-  val outbase = "test/trial01b"
+  val outbase = "test/trial_big"
   val idxTask = Int32.toInt (me + offset)
   (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
