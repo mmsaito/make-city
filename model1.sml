@@ -384,13 +384,20 @@ structure Trivial = struct
   end
 
   (* トップレベル関数 *)
-  fun run1 {conf, recstep, tStop, dir, tag, city} = let
+  fun run1 {conf:conf, recstep, tStop, dir, tag, city, seq} = let
+    (*
     val () = writeConf conf (dir^"/conf_"^ tag^".csv")
     val os = T.openOut      (dir^"/pop_" ^ tag^".csv")
+    *)
+    val os = T.openOut ("/dev/null")
+
+    val os2= if seq then SOME (T.openOut  (dir^"/seq_" ^ tag^".csv")) else NONE
+    val () = Option.app (fn os2 => T.output(os2, #mcid conf ^ " ")) os2
+
     val () = Probe.showPopTag os 5
     val nstep   = tStop div recstep
     fun step city = let
-      val city = Iterator.applyN F.advanceTime recstep city
+      val city = Iterator.applyN (F.advanceTime os2) recstep city
       val pop  = Probe.reducePop' city
       (* val _ = print (sI (#time city) ^ "\n") *)
     in
@@ -398,7 +405,7 @@ structure Trivial = struct
     end
   in
     Iterator.applyN step nstep city 
-      before T.closeOut os
+      before (T.closeOut os; Option.app T.closeOut os2)
   end
 
   
@@ -413,7 +420,7 @@ structure Trivial = struct
 
     val nstep   = tStop div recstep
     fun step city = let
-      val city = Iterator.applyN F.advanceTime recstep city
+      val city = Iterator.applyN (F.advanceTime NONE) recstep city
       (* val pop  = Probe.reducePop' city *)
     in
       city before 

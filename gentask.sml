@@ -39,25 +39,23 @@ structure GenTask = struct
     List.concat (map (dd n) xs)
   end
 
-  fun dup' (n, conf:Trivial.conf) = let
-    fun set (x:Trivial.conf) mcid  =
-    {betaNPark  = #betaNPark x
-    ,betaNHome  = #betaNHome x
-    ,betaNSuper = #betaNSuper x
-    ,betaNSch   = #betaNSch x
-    ,betaNCorp  = #betaNCorp x
-    ,betaNTrain = #betaNTrain x
-    ,infectRule = #infectRule x
-    ,nPop       = #nPop x
-    ,tag        = #tag x    
-    ,vacEff     = #vacEff x
-    ,vacTrCover = #vacTrCover x
-    ,vacSchCover= #vacSchCover x
-    ,mcid       = Int.toString mcid
-    }: Trivial.conf
-  in
-    List.tabulate(n, set conf)
-  end
+  fun setMcid (x:Trivial.conf) mcid  =
+  {betaNPark  = #betaNPark x
+  ,betaNHome  = #betaNHome x
+  ,betaNSuper = #betaNSuper x
+  ,betaNSch   = #betaNSch x
+  ,betaNCorp  = #betaNCorp x
+  ,betaNTrain = #betaNTrain x
+  ,infectRule = #infectRule x
+  ,nPop       = #nPop x
+  ,tag        = #tag x    
+  ,vacEff     = #vacEff x
+  ,vacTrCover = #vacTrCover x
+  ,vacSchCover= #vacSchCover x
+  ,mcid       = Int.toString mcid
+  }: Trivial.conf
+
+  fun dup' (n, conf:Trivial.conf) = List.tabulate(n, setMcid conf)
 
   (* ルール1: 単純な重複組み合わせとする *)
   val rrSet = [1.2, 1.5, 1.8, 3.0]

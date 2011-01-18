@@ -525,30 +525,42 @@ structure Frame = struct
        | NONE   => NONE   before failTr := !failTr + 1
 *)
   (* いま居る場所の感染効率から確率過程により健康状態を遷移させる *)
-  fun updateHealth ({area=areas,train,time}:city) (PERSON p: person): health list = let
+  fun updateHealth
+    (osSeq:TextIO.outstream option) 
+    ({area=areas,train,time}:city) (PERSON p: person): health list = let
     val rnd    = getrnd()
-    val pTrns =
+    val  pTrns =
       case #visit p 
         of {place_k = Train, id, ...} => #pTrns (train $ id)
          | place_t                    => #pTrns (placeAreas areas place_t)
     val cur::hist = #health p
+    fun printRole () =
+      case osSeq 
+        of NONE => ()
+         | SOME os =>
+             (case (#role p)
+               of Employed => TextIO.output(os,"E")
+                | Hausfrau => TextIO.output(os,"H")
+                | Student  => TextIO.output(os,"S")
+             )
     fun redu_s2e() = 
       if List.exists (fn VAC _ => true | _ => false) (#health p) then
         0.0
       else
-        #s2e pTrns
+        #s2e pTrns 
+    val newStat =  
+      case cur
+        of SUS   => rndSel rnd (redu_s2e()) ([EXP time, cur],[cur]) @ hist
+         | EXP _ => rndSel rnd (#e2i pTrns) ([INF time, cur],[cur]) @ hist
+         | INF _ => rndSel rnd (#i2r pTrns) ([REC time, cur],[cur]) @ hist
+         | _     => cur :: hist
   in
-    (* 注: 履歴のとり方に注意。
-     * rndSel rnd (#s2e pTrns) (EXP time, cur) :: cur :: hist ではない!! *)
-    case cur
-      of SUS   => rndSel rnd (redu_s2e()) ([EXP time, cur],[cur]) @ hist
-       | EXP _ => rndSel rnd (#e2i pTrns) ([INF time, cur],[cur]) @ hist
-       | INF _ => rndSel rnd (#i2r pTrns) ([REC time, cur],[cur]) @ hist
-       | _     => cur :: hist
+    (if EXP time = hd newStat then printRole() else ()
+    ;newStat)
   end
 
   (* 人間の振る舞いのこのプログラムが「お仕着せる」部分。核である *)
-  fun evalPerson (city:city) (PERSON p: person) = let
+  fun evalPerson (osSeq:TextIO.outstream option) (city:city) (PERSON p: person) = let
     val {area=areas,train,time} = city
     fun update {visit, dest, sched} = PERSON
       { age    = #age p, gender = #gender p, role = #role p, belong = #belong p
@@ -556,7 +568,7 @@ structure Frame = struct
       , sched  = sched
       , visit  = visit
       , dest   = dest     
-      , health = updateHealth city (PERSON p)
+      , health = updateHealth osSeq city (PERSON p)
       } 
       before
         (if #place_k visit <> #place_k (#visit p) 
@@ -694,11 +706,11 @@ structure Frame = struct
   end
 
   (* シミュレーションのトップレベル関数 *)
-  fun advanceTime (city:city): city = let
+  fun advanceTime (os2:TextIO.outstream option) (city:city): city = let
     val new_area = 
       Vector.map 
         (fn (id,persons,places) => 
-          (id, map (evalPerson city) persons, places))  (#area city)
+          (id, map (evalPerson os2 city) persons, places))  (#area city)
     val new_train = Vector.map (evalTrain (#time city)) (#train city)
     (* ----< bondary of time> ------------------------------------- *)
     val new_time = #time city + 1

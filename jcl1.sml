@@ -134,6 +134,8 @@ structure JCL1 = struct
        ) [0.1, 0.3, 0.5]
      ) [0.5, 0.6, 0.7, 0.8, 1.0]
 *)
+
+(*
   val tasks =
     GenTask.dup' (16384, conf' eff4 novac
         {tag  = "ARBIT_30_JOJ_ARBIT"
@@ -144,6 +146,18 @@ structure JCL1 = struct
                 }:belongSpec
         ,isRandom = true
         }) 
+        *)
+
+  fun readF s = let
+    val is = TextIO.openIn s
+    fun loop () = 
+      case TextIO.inputLine is
+        of SOME x => x :: loop ()
+         | NONE   => nil
+  in
+    loop () before TextIO.closeIn is
+  end
+
 (*
 fun come_from_test ()  = let
   val conf = List.nth(tasks, 16*1)
@@ -172,6 +186,22 @@ fun main offset = let
   val idxTask = Int32.toInt (me + offset)
   (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
 
+  val iCL = offset div 256 + 1
+  val mem_cl = 
+    map (valOf o Int.fromString) (List.take(readF("cl_mem3@" ^ Int32.toString iCL ^ ".csv"), 256))
+  val tasks =
+    map (
+      GenTask.setMcid (conf' eff4 novac
+          {tag  = "ARBIT_30_JOJ_ARBIT"
+          ,n    = 30
+          ,rule = {role   = ROL_ARBIT (* ignored *)
+                  ,livein = LIV_SOME JOJ
+                  ,workat = WOR_ARBIT (* ignored *)
+                  }:belongSpec
+          ,isRandom = true
+          }) 
+    ) mem_cl
+
   val nTasks = length tasks
 
   val _ = 
@@ -191,14 +221,17 @@ fun main offset = let
         val _ = Trivial.inirnd 0;
         val city = Trivial.city conf;
 
-        val tStop = 360*Type.days';
+        (* val tStop = 360*Type.days' *)
+        val tStop = 10*Type.days';
 
        (* シミュレーション中はMonte Carlo実験毎に違う乱数列を使う *)
         val _ = Trivial.inirnd (Alice.iS (#mcid conf))
       in
         ignore (
           Trivial.run1 {conf=conf, recstep=180, tStop=tStop, tag=tag
-                       ,dir=outbase^"/"^tagbase, city=city}
+                       ,dir=outbase^"/"^tagbase, city=city
+                       ,seq=true
+                       }
         )
       end
     else
