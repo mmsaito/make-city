@@ -10,6 +10,7 @@ structure JCL1 = struct
 
   structure M = MPI.Marshall;
   structure U = MPI.Unmarshall;
+  structure P = EasyPrint;
 
   open Type
     ; infix 1 @@
@@ -135,7 +136,6 @@ structure JCL1 = struct
      ) [0.5, 0.6, 0.7, 0.8, 1.0]
 *)
 
-(*
   val tasks =
     GenTask.dup' (16384, conf' eff4 novac
         {tag  = "ARBIT_30_JOJ_ARBIT"
@@ -146,17 +146,6 @@ structure JCL1 = struct
                 }:belongSpec
         ,isRandom = true
         }) 
-        *)
-
-  fun readF s = let
-    val is = TextIO.openIn s
-    fun loop () = 
-      case TextIO.inputLine is
-        of SOME x => x :: loop ()
-         | NONE   => nil
-  in
-    loop () before TextIO.closeIn is
-  end
 
 (*
 fun come_from_test ()  = let
@@ -175,20 +164,15 @@ in
 end
 *)
 
-fun main offset = let
-  val t0 = Time.now();
-  val _ = MPI.init();
-  val nproc = MPI.comm_size();
-  val me    = MPI.comm_rank();
-
-  (* 担当タスクの決定 *)
-  val outbase = "test/trial_big"
-  val idxTask = Int32.toInt (me + offset)
-  (*val tasks = GenTask.gen3 {setO = [1.2, 1.5, 1.8], setTr = [1.8, 2.0, 3.0], * nDup = 12} *)
-
-  val iCL = offset div 256 + 1
+  fun take (xs, n) = List.take(xs, Int.min(n,length(xs)))
+(*
   val mem_cl = 
-    map (valOf o Int.fromString) (List.take(readF("cl_mem3@" ^ Int32.toString iCL ^ ".csv"), 256))
+    List.concat (
+      List.tabulate(4, fn i =>
+        map (valOf o Int.fromString) (take(X_Misc.readF("cl_mem3@" ^ Int.toString (i + 1) ^ ".csv"), 256))
+      )
+    )
+
   val tasks =
     map (
       GenTask.setMcid (conf' eff4 novac
@@ -201,6 +185,20 @@ fun main offset = let
           ,isRandom = true
           }) 
     ) mem_cl
+*)
+
+val tStop = 360*Type.days';
+
+fun main offset = let
+  val t0 = Time.now();
+  val _ = MPI.init();
+  val nproc = MPI.comm_size();
+  val me    = MPI.comm_rank();
+
+  (* 担当タスクの決定 *)
+  val outbase = "test/trial_big"
+  val idxTask = Int32.toInt (me + offset)
+
 
   val nTasks = length tasks
 
@@ -208,7 +206,7 @@ fun main offset = let
     if idxTask < nTasks then
       let
         val conf     = List.nth(tasks, idxTask)
-        val tagbase  = #tag conf 
+        val tagbase  = #tag conf
         val tag      = #tag conf ^ "@" ^ #mcid conf
         val _ = MPI.barrier MPI.COMM_WORLD
         val _ = 
@@ -218,14 +216,12 @@ fun main offset = let
         val _ = MPI.barrier MPI.COMM_WORLD
 
        (* まちを構成するまでは共通の乱数列を使う *)
-        val _ = Trivial.inirnd 0;
-        val city = Trivial.city conf;
-
-        (* val tStop = 360*Type.days' *)
-        val tStop = 10*Type.days';
+        val _ = Trivial.inirnd 0
+        val city = Trivial.city conf
 
        (* シミュレーション中はMonte Carlo実験毎に違う乱数列を使う *)
         val _ = Trivial.inirnd (Alice.iS (#mcid conf))
+        val city = Trivial.infectVac conf city
       in
         ignore (
           Trivial.run1 {conf=conf, recstep=180, tStop=tStop, tag=tag

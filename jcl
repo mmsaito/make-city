@@ -19,6 +19,5 @@ plen2c ${QSUB_NODEINF} > ./machinefile.${QSUB_REQID}
 mpdboot -n ${QSUB_VNODES} -f ./machinefile.${QSUB_REQID} -r plesh
 
 #/home/saitohm/MPICH2/bin/mpiexec -n 32 -f ./machinefile.${QSUB_REQID} ./mpi_sample_mpich32
-#mpiexec -n 32 sml ./jcl1.sml
-mpiexec -n 256 sml ./go.sml 0
+mpiexec -n 256 sml ./go.sml 512
 mpdallexit

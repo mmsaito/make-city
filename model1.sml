@@ -331,7 +331,8 @@ structure Trivial = struct
   val infect_rule1: area -> area =  
     F.ruleInfect 5 {role = ROL_SOME Employed, livein = LIV_SOME JOJ, workat = WOR_SOME [(2,Corp)]}
 *)
-  fun city (conf:conf) =  let
+
+  fun infectVac (conf:conf) (city:city) = let
     val () = F.setVacEff (#vacEff conf)
     val rnd = getrnd()
     val vac: area -> area =
@@ -354,12 +355,19 @@ structure Trivial = struct
                    (* マジックナンバー 5 = 都市数 *)
             )
   in
+    {area  = Vector.map (infect o vac) (#area city)
+    ,train = #train city
+    ,time  = #time city
+    }
+  end
+
+  fun city (conf:conf) = 
     F.evalPlace
-      {area  = Vector.map (infect o vac) (F.makeVisit' (area conf) ruleVisit)
+      {area  = F.makeVisit' (area conf) ruleVisit
       ,train = train conf
       ,time  = 0
       }
-  end
+
   (* 3000人 、1日で、45[sec] 
      150万人、1日で、6.25[時間]    (実スケール)
      15万人 、1日で、37.5[分]      (1/10スケール)
@@ -383,16 +391,40 @@ structure Trivial = struct
     )
   end
 
+    fun roleSym Employed = #"E"
+      | roleSym Hausfrau = #"H"
+      | roleSym Student  = #"S"
+
+    fun symOrd (#"S",#"S") = EQUAL
+      | symOrd (#"S",_   ) = GREATER
+      | symOrd (#"E",#"S") = LESS
+      | symOrd (#"E",#"E") = EQUAL
+      | symOrd (#"E",_   ) = GREATER
+      | symOrd (#"H",#"H") = EQUAL
+      | symOrd (#"H",_   ) = LESS
+
+    fun infSeq (city:city) = let
+      fun inArea (area:area) = 
+        List.mapPartial
+          (fn PERSON p => 
+            case hd (#health p)
+              of INF _ => SOME (roleSym (#role p)) | _ => NONE) (popArea area) 
+      val seq = List.concat (Misc.listV (Vector.map inArea (#area city)))
+    in
+      String.implode (Misc.qsortL symOrd seq)
+    end
+
+
   (* トップレベル関数 *)
   fun run1 {conf:conf, recstep, tStop, dir, tag, city, seq} = let
-    (*
     val () = writeConf conf (dir^"/conf_"^ tag^".csv")
     val os = T.openOut      (dir^"/pop_" ^ tag^".csv")
-    *)
-    val os = T.openOut ("/dev/null")
-
     val os2= if seq then SOME (T.openOut  (dir^"/seq_" ^ tag^".csv")) else NONE
-    val () = Option.app (fn os2 => T.output(os2, #mcid conf ^ " ")) os2
+    val () = Option.app (fn os2 => 
+      (T.output(os2, #mcid conf ^ " ")
+      ;T.output(os2, infSeq city)
+      ;T.output(os2, ".")
+      )) os2
 
     val () = Probe.showPopTag os 5
     val nstep   = tStop div recstep
@@ -405,9 +437,11 @@ structure Trivial = struct
     end
   in
     Iterator.applyN step nstep city 
-      before (T.closeOut os; Option.app T.closeOut os2)
+      before (T.closeOut os
+             ; Option.app (fn os => T.output(os, "\n")) os2
+             ; Option.app T.closeOut os2
+             )
   end
-
   
   fun run2 conf recstep tStop file (*city*) = let
     val npick = 20

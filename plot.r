@@ -125,8 +125,8 @@ popplot1 <- function(x,offset,ylab,maxday,conf,maxE)
 
 popplot <- function(x,maxday,conf,tag,toFile,maxE)
 {
-    nuse = 2
-    if (missing(toFile) || !toFile) {
+  nuse = 2
+  if (!toFile) {
 	n = length(dev.list())
 	if (n < nuse) {
 	    for (i in 1:(nuse-n)) {
@@ -152,6 +152,11 @@ popplot <- function(x,maxday,conf,tag,toFile,maxE)
     
     if (!(missing(toFile) || !toFile)) {
         Map(dev.off, dv)
+    }
+
+    if (toFile) {
+      dev.off(dv[1])
+      dev.off(dv[2])
     }
 
 #    if (missing(maxE)) {

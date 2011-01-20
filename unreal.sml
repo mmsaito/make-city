@@ -564,7 +564,7 @@ structure Frame = struct
     val {area=areas,train,time} = city
     fun update {visit, dest, sched} = PERSON
       { age    = #age p, gender = #gender p, role = #role p, belong = #belong p
-      , mkSched  = #mkSched p
+      , mkSched= #mkSched p
       , sched  = sched
       , visit  = visit
       , dest   = dest     

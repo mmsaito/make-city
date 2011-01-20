@@ -113,6 +113,15 @@ in
   in
     dig arcs
   end
-    
+
+  fun readF s = let
+    val is = TextIO.openIn s
+    fun loop () = 
+      case TextIO.inputLine is
+        of SOME x => x :: loop ()
+         | NONE   => nil
+  in
+    loop () before TextIO.closeIn is
+  end
 end
 end
