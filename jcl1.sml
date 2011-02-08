@@ -18,6 +18,14 @@ structure JCL1 = struct
 
   val novac = {vacEff = 0.0, vacTrCover = 0.0, vacSchCover = 0.0}
 
+  val nPlaces = 
+    #[{sch = 2, corp = 4, cram = 0, super = 10, park = 2}
+     ,{sch = 2, corp = 8, cram = 1, super = 10, park = 2}
+     ,{sch = 2, corp = 4, cram = 0, super = 10, park = 2}
+     ,{sch = 3, corp =30, cram = 1, super = 10, park = 2}
+     ,{sch = 2, corp =30, cram = 0, super = 10, park = 2}
+     ]
+
   fun conf'
     ({super, park, home, corp, school, train})
     ({vacEff:real, vacTrCover:real, vacSchCover:real})
@@ -33,6 +41,7 @@ structure JCL1 = struct
     ,vacTrCover = vacTrCover
     ,vacSchCover= vacSchCover
     ,nPop       = 3000
+    ,nPlaces    = nPlaces
     ,tag        = 
       String.concatWith "_" 
         ( map Real.toString [super,park,home,corp,school,train]

@@ -28,6 +28,7 @@ structure Trivial = struct
     ,betaNPark  : real
     ,betaNTrain : real
     ,infectRule : {tag:string, n:int, rule:belongSpec, isRandom:bool}
+    ,nPlaces    : {cram:int, sch:int, corp:int, park:int, super:int} vector
     ,nPop       : int (* ‚Ð‚Æ‚Â‚ÌŠX‚ÌlŒûBŒã‚Å”z—ñ‚É‚·‚é *)
     ,vacEff     : real (* ƒƒNƒ`ƒ“Œø‰Ê *)
     ,vacTrCover : real (* ÚŽíŽÀŽ{—¦ *)
@@ -263,7 +264,8 @@ structure Trivial = struct
           (* [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]) *)
      ) [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23])
 
-  (* ŠwZ”,‰ïŽÐ”‚Ì•\ *)
+  (* ŠwZ”,‰ïŽÐ”‚Ì•\ Ë 2/1‚ÌlŽ@‚É‚æ‚è”pŽ~ *)
+  (* 
   fun makePopTable (conf:conf) = let
     val nAvgPop  = #nPop conf
     val nCityPop = nAvgPop * 5
@@ -287,6 +289,7 @@ structure Trivial = struct
   in
     map norm popTable0
   end
+  *)
 
   (* ====================================================================  *)
   (* ã‹Lƒ‹[ƒ‹‚É‚æ‚é“sŽs‚Ì‘g‚Ý—§‚Ä *)
@@ -296,25 +299,16 @@ structure Trivial = struct
     F.makeHome at betaN (F.makePerson (#nPop conf) rulePerson) ruleHome
   end
 
-  fun place (conf:conf) = let
-    infixr 2 `::
-    fun op `:: ((true,x),xs)  = x :: xs
-      | op `:: ((false,_),xs) = xs
-    val popTbl  = makePopTable conf
-  in fn at => fn home =>
-    let 
-      val {nSch, nCorp, ...} = valOf (List.find (fn {area_t,...} => area_t = at) popTbl)
-    in 
-      F.makePlace at home (
-          (at = SJK orelse at = TAC, 
-           ( 1   , rulePlace Cram  (#betaNSch   conf)) )`::
-          [(nSch , rulePlace Sch   (#betaNSch   conf))
-          ,(10   , rulePlace Super (#betaNSuper conf))
-          ,(nCorp, rulePlace Corp  (#betaNCorp  conf))
-          ,( 2   , rulePlace Park  (#betaNPark  conf))
-          ]
-        ) 
-    end
+  fun place (conf:conf) at home = let 
+      val nPlaces = #nPlaces conf $ at
+  in 
+    F.makePlace at home
+        [(#cram  nPlaces, rulePlace Cram  (#betaNSch   conf))
+        ,(#sch   nPlaces, rulePlace Sch   (#betaNSch   conf))
+        ,(#super nPlaces, rulePlace Super (#betaNSuper conf))
+        ,(#corp  nPlaces, rulePlace Corp  (#betaNCorp  conf))
+        ,(#park  nPlaces, rulePlace Park  (#betaNPark  conf))
+        ]
   end
 
   fun area (conf:conf) = 
@@ -327,10 +321,6 @@ structure Trivial = struct
 
   fun train (conf:conf) = F.makeTrains 
     {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
-(*
-  val infect_rule1: area -> area =  
-    F.ruleInfect 5 {role = ROL_SOME Employed, livein = LIV_SOME JOJ, workat = WOR_SOME [(2,Corp)]}
-*)
 
   fun infectVac (conf:conf) (city:city) = let
     val () = F.setVacEff (#vacEff conf)

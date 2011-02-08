@@ -48,6 +48,7 @@ structure GenTask = struct
   ,betaNTrain = #betaNTrain x
   ,infectRule = #infectRule x
   ,nPop       = #nPop x
+  ,nPlaces    = #nPlaces x
   ,tag        = #tag x    
   ,vacEff     = #vacEff x
   ,vacTrCover = #vacTrCover x
