@@ -8,6 +8,8 @@ Library
     structure Trivial
     structure Probe
     structure GenTask
+    structure Tasks1
+    structure Tasks2
     structure JCL1
 is
     $/basis.cm
