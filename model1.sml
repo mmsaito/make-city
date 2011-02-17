@@ -29,7 +29,7 @@ structure Trivial = struct
     ,betaNTrain : real
     ,infectRule : {tag:string, n:int, rule:belongSpec, isRandom:bool}
     ,nPlaces    : {cram:int, sch:int, corp:int, park:int, super:int} vector
-    ,nPop       : int (* ‚Ð‚Æ‚Â‚ÌŠX‚ÌlŒûBŒã‚Å”z—ñ‚É‚·‚é *)
+    ,nPop       : int vector (* ‚Ð‚Æ‚Â‚ÌŠX‚ÌlŒûBŒã‚Å”z—ñ‚É‚·‚é *)
     ,vacEff     : real (* ƒƒNƒ`ƒ“Œø‰Ê *)
     ,vacTrCover : real (* ÚŽíŽÀŽ{—¦ *)
     ,vacSchCover: real (* ÚŽíŽÀŽ{—¦ *)
@@ -296,7 +296,7 @@ structure Trivial = struct
   fun perHome (conf:conf) at = let
     val betaN = fn () => abs (#betaNHome conf*(1.0 + 0.1*rgauss (getrnd())))
   in
-    F.makeHome at betaN (F.makePerson (#nPop conf) rulePerson) ruleHome
+    F.makeHome at betaN (F.makePerson (#nPop conf $ at) rulePerson) ruleHome
   end
 
   fun place (conf:conf) at home = let 

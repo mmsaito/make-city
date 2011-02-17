@@ -39,6 +39,8 @@ structure GenTask = struct
     List.concat (map (dd n) xs)
   end
 
+  fun rep(n,x) = Vector.tabulate(n, fn _ => x)
+
   fun setMcid (x:Trivial.conf) mcid  =
   {betaNPark  = #betaNPark x
   ,betaNHome  = #betaNHome x
@@ -127,7 +129,7 @@ structure Tasks1 = struct
     ,vacEff     = vacEff
     ,vacTrCover = vacTrCover
     ,vacSchCover= vacSchCover
-    ,nPop       = 3000
+    ,nPop       = rep(5, 3000)
     ,nPlaces    = nPlaces
     ,tag        = 
       String.concatWith "_" 
@@ -256,7 +258,7 @@ end
 *)
 structure Tasks2 = struct
   open GenTask
-  open Type
+  open Type; infix 9 $;
   fun genNPlaces (s:real) = let
     fun op * (x:int,y:real):int =
       Int.max(Real.round (Real.* (Real.fromInt x,y)),1)
@@ -271,7 +273,7 @@ structure Tasks2 = struct
 
   fun genConf
     {rr = {super, park, home, corp, school, train}
-    ,nPop: int
+    ,nPop: int vector
     ,nPlacesScale: real
     }
   = {betaNSuper = super  * Type.gamma
@@ -290,15 +292,64 @@ structure Tasks2 = struct
       String.concatWith "_" 
         ( map Real.toString [super,park,home,corp,school,train]
         @ [#tag (List.nth(Tasks1.infRules1, 0))
-          ,Alice.sI (nPop)
+          ,Alice.sI (nPop $ 0)
           ,Alice.sR (nPlacesScale)]
         )
     ,mcid       = getOpt (NONE, "0")
     }: Trivial.conf
   val tasks1 = 
-    map (fn s => genConf {rr = Tasks1.reproNum4, nPop = 200000, nPlacesScale = s})
+    map (fn s => genConf {rr = Tasks1.reproNum4, nPop = rep (5,200000), nPlacesScale = s})
       [1.0, 10.0, 100.0]
   val tasks2 = 
-    map (fn s => genConf {rr = Tasks1.reproNum4, nPop = 2000, nPlacesScale = s})
+    map (fn s => genConf {rr = Tasks1.reproNum4, nPop = rep (5, 2000), nPlacesScale = s})
       [1.0, 0.5, 0.1]
 end 
+
+structure Tasks3 = struct
+  open GenTask
+  open Type; infix 9 $;
+  val nPop = #[571641, 176866, 138684, 314861, 44680]
+  val reproNum3 = {super = 0.3, park = 0.5, home = 1.5, corp = 4.0, school = 5.0, train = 6.0}
+  val reproNum4 = {super = 0.3, park = 0.5, home = 1.5, corp = 3.0, school = 4.0, train = 6.0}
+  val reproNum5 = {super = 0.3, park = 0.5, home = 1.2, corp = 1.5, school = 1.8, train = 3.0}
+  val nPlaces1 = 
+    #[{sch = 70, corp = 1, cram = 0, super = 10, park = 2}
+     ,{sch = 20, corp = 1, cram = 1, super = 10, park = 2}
+     ,{sch = 12, corp = 1, cram = 0, super = 10, park = 2}
+     ,{sch = 29, corp =20, cram = 1, super = 10, park = 2}
+     ,{sch =  8, corp =20, cram = 0, super = 10, park = 2}
+     ]
+  val nPlaces2 = 
+    #[{sch = 28, corp = 1, cram = 0, super = 10, park = 2}
+     ,{sch = 28, corp = 1, cram = 1, super = 10, park = 2}
+     ,{sch = 28, corp = 1, cram = 0, super = 10, park = 2}
+     ,{sch = 28, corp =20, cram = 1, super = 10, park = 2}
+     ,{sch = 28, corp =20, cram = 0, super = 10, park = 2}
+     ]
+
+  fun genConf
+    {rr = {super, park, home, corp, school, train}
+    ,nPlaces
+    }
+  = {betaNSuper = super  * Type.gamma
+    ,betaNPark  = park   * Type.gamma
+    ,betaNHome  = home   * Type.gamma
+    ,betaNCorp  = corp   * Type.gamma
+    ,betaNSch   = school * Type.gamma
+    ,betaNTrain = train  * Type.gamma
+    ,infectRule = List.nth(Tasks1.infRules1, 0)
+    ,vacEff     = 0.0
+    ,vacTrCover = 0.0
+    ,vacSchCover= 0.0
+    ,nPop       = nPop
+    ,nPlaces    = nPlaces
+    ,tag        = 
+      String.concatWith "_" 
+        ( map Real.toString [super,park,home,corp,school,train]
+        @ [#tag (List.nth(Tasks1.infRules1, 0))]
+        @ Misc.listV (Vector.map Alice.sI (nPop))
+        )
+    ,mcid       = getOpt (NONE, "0")
+    }: Trivial.conf
+end
+
