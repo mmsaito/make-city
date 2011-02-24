@@ -217,11 +217,11 @@ structure Trivial = struct
     val nCorp =
       Vector.map (fn area => Vector.length (#corp (#3 area))) areas
     val nSumCorp = Vector.foldl (op + ) 0 nCorp
-    val selCorp = let
+    val selCorp n = let
       val pr_area = Misc.listV 
         (Vector.mapi (fn (i,nC) => (rI nC / rI nSumCorp, #3 (areas $ i))) nCorp)
     in
-      fn () => rndSelV rnd (#corp (rndSelLP rnd pr_area))
+      List.tabulate(n, fn _ => rndSelV rnd (#corp (rndSelLP rnd pr_area)))
     end
   in  
     fn (PERSON p: person) => let
@@ -245,8 +245,10 @@ structure Trivial = struct
       rndSelV rnd (#sch a)
     end
   in
-    case #role p 
-      of Employed => map #id [selCorp(), rndSelV rnd (#super a0)]
+    case #role p
+      (* 23.2.18 外勤の実験。とりあえず、コード改変でやってみる。*)
+      (* of Employed => map #id [selCorp(), rndSelV rnd (#super a0)] *)
+      of Employed => map #id (rndSelV rnd (#super a0) :: selCorp 5)
        | Student  => map #id (selCram() `:: [selSch (), rndSelV rnd (#super a0)])
        | HausFrau => map #id [rndSelV rnd (#super a0), rndSelV rnd (#super a'), rndSelV rnd (#park a0) ]
   end
