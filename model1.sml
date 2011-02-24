@@ -217,7 +217,7 @@ structure Trivial = struct
     val nCorp =
       Vector.map (fn area => Vector.length (#corp (#3 area))) areas
     val nSumCorp = Vector.foldl (op + ) 0 nCorp
-    val selCorp n = let
+    fun selCorp n = let
       val pr_area = Misc.listV 
         (Vector.mapi (fn (i,nC) => (rI nC / rI nSumCorp, #3 (areas $ i))) nCorp)
     in
