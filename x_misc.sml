@@ -106,12 +106,13 @@ in
       (popAt(ys, Random.randInt rnd mod (length ys)))) n (nil,seq)
 
   fun mkDir path = let
+    val org = OS.FileSys.getDir()
     val arcs = CSV.split {seps="/\\", spcs=""} path
     fun dig (x::xs) = 
       (OS.FileSys.mkDir x handle _ => (); OS.FileSys.chDir x; dig xs; OS.FileSys.chDir "../")
       | dig nil = ()
   in
-    dig arcs
+    (dig arcs; OS.FileSys.chDir org)
   end
 
   fun readF s = let
