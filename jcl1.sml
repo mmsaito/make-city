@@ -6,7 +6,7 @@ structure JCL1 = struct
   open Type
   val tasks   = Tasks2.tasks1 @ Tasks2.tasks2
   val tStop   = 360*Type.days';
-  val outbase = "test/scale"
+  val outbase = "../code-unreal-2/test/scale2"
 
   fun evalConf {saveCity:bool, run:bool, mpi: bool} conf = let
     fun appIf true  f a = ignore (f a)
