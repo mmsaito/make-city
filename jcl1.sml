@@ -9,13 +9,13 @@ structure JCL1 = struct
   val outbase = "../code-unreal-2/test/scale2"
 
   fun evalConf {saveCity:bool, run:bool, mpi: bool} conf = let
-    fun appIf true  f a = ignore (f a)
-      | appIf false f a = ()
+    fun appIf true  f a = SOME (f a)
+      | appIf false f a = NONE
     
     val tagbase  = #tag conf
     val tag      = #tag conf ^ "@" ^ #mcid conf
-    val () = appIf mpi MPI.barrier MPI.COMM_WORLD
-    val () = 
+    val _ = appIf mpi MPI.barrier MPI.COMM_WORLD
+    val _ = 
       if valOf (Int.fromString (#mcid conf)) = 0
         then X_Misc.mkDir (outbase^"/"^tagbase) handle _ => () 
         else ()
@@ -29,12 +29,14 @@ structure JCL1 = struct
     val _ = Trivial.inirnd (Alice.iS (#mcid conf))
     val city = Trivial.infectVac conf city
 
-    val () = appIf saveCity (Probe.writeCity city) (outbase^"/"^tagbase^".city")
+    val _ = appIf saveCity (Probe.writeCity city) (outbase^"/"^tagbase^".city")
   in
-    appIf run Trivial.run1 {conf=conf, recstep=180, tStop=tStop, tag=tag
-                           ,dir=outbase^"/"^tagbase, city=city
-                           ,seq=true
-                           }
+    if run then
+      Trivial.run1 {conf=conf, recstep=180, tStop=tStop, tag=tag
+                   ,dir=outbase^"/"^tagbase, city=city
+                   ,seq=true}
+    else
+      city
   end
 
   fun main offset = let
@@ -49,7 +51,7 @@ structure JCL1 = struct
 
     val _ = 
       if idxTask < nTasks then
-        evalConf {saveCity = false, run = true, mpi = true} (List.nth(tasks, idxTask))
+        ignore ( evalConf {saveCity = false, run = true, mpi = true} (List.nth(tasks, idxTask)))
       else
         (MPI.barrier MPI.COMM_WORLD
         ;MPI.barrier MPI.COMM_WORLD

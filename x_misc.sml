@@ -41,6 +41,28 @@ in
   in
     trick()
   end
+
+  (* パレート分布に従う人員規模をつくり出すための場所indexのランダム抽出 *)
+  fun paretoSel {alpha, gamma, n, m, beta} = let
+    open Alice; infix 9 *^;
+    val n  = n - 1.0 (* trick to get n + m - 1 as the maximal index *)
+    val Q1 = 1.0 - (alpha/gamma)*^beta
+    val P1 = alpha*beta/(beta - 1.0)*(1.0 - (alpha/gamma)*^(beta - 1.0))
+    val P2 = P1 + gamma*Q1*m/n
+    fun u rnd = P2*Random.randReal rnd
+    fun clip x = Real.round x
+  in
+    fn rnd => let
+      val u = u rnd
+      val z = 
+        if u < P1 
+        then 1.0 - (1.0 - (beta - 1.0)*u/alpha/beta)*^(beta/(beta-1.0))
+        else Q1 + (u - P1)/gamma
+    in
+      clip (n*z/Q1)
+    end
+  end
+
   (* テストコード
     datatype tag = C1 | C2 | C3 | C4
     val prL = [(0.1,C1),(0.4,C4),(0.2,C2),(0.3,C3)]

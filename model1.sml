@@ -9,7 +9,7 @@ structure Trivial = struct
   structure T = TextIO
   structure It = Iterator
   open X_Misc;
-  open Alice;
+  open Alice; infix 9 *^;
   open EasyPrint;
 
   (* モデル設定パラメータ:
@@ -176,9 +176,35 @@ structure Trivial = struct
   end
 
   (* 人間生成ルール *)
+  val ageTable = let
+    fun normalise xs = let
+      val s = rI (foldl (fn ((_,_,n),s) => n + s) 0 xs) in
+      map (fn (a,b,c) => (rI c/s,(a,b))) xs end
+  in normalise
+      [(0,  5,476692)
+      ,(5, 10,481382)
+      ,(10,15,466593)
+      ,(15,20,562968)
+      ,(20,25,859742)
+      ,(25,30,981230)
+      ,(30,35,1121689)
+      ,(35,40,1026016)
+      ,(40,45,885146)
+      ,(45,50,736656)
+      ,(50,55,770054)
+      ,(55,60,938669)
+      ,(60,65,813422)
+      ,(65,70,705944)
+      ,(70,75,612400)
+      ,(75,80,451357)
+      ,(80,100,525826)
+      ]
+  end
+
   fun rulePerson id = let
     val rnd = getrnd()
-    val age    = Real.abs (30.0 + 30.0*rgauss rnd)
+    (* val age = Real.abs (30.0 + 30.0*rgauss rnd) *)
+    val age = rI (irndIn rnd (rndSelLP rnd ageTable))
     val gender = rndSel rnd 0.5 (F,M)
     val (role,sched)   = 
       if (age <= 22.0)     then (Student, schedStu)
@@ -217,12 +243,23 @@ structure Trivial = struct
     val nCorp =
       Vector.map (fn area => Vector.length (#corp (#3 area))) areas
     val nSumCorp = Vector.foldl (op + ) 0 nCorp
-    fun selCorp n = let
-      val pr_area = Misc.listV 
+
+    val prCorpArea = Misc.listV 
         (Vector.mapi (fn (i,nC) => (rI nC / rI nSumCorp, #3 (areas $ i))) nCorp)
+
+    (* 会社の従業員数の分布がパレート分布になるように構成 *)
+    fun selMyCorp () = let
+      val corp = #corp (rndSelLP rnd prCorpArea)
+      val n    = rI (Vector.length corp)
+      val idxSel = paretoSel {alpha = 1.0, gamma = 1e4, n = n - 20.0, m = 20.0, beta = 2.0}
     in
-      List.tabulate(n, fn _ => rndSelV rnd (#corp (rndSelLP rnd pr_area)))
+      corp $ (idxSel rnd)
     end
+
+    (* 外勤先はランダムに選択 *)
+    fun selCorp n = 
+      selMyCorp () :: 
+        List.tabulate(n-1, fn _ => rndSelV rnd (#corp (rndSelLP rnd prCorpArea)))
   in  
     fn (PERSON p: person) => let
     val i0 = areaPer (PERSON p)
@@ -359,13 +396,6 @@ structure Trivial = struct
       ,train = train conf
       ,time  = 0
       }
-
-  (* 3000人 、1日で、45[sec] 
-     150万人、1日で、6.25[時間]    (実スケール)
-     15万人 、1日で、37.5[分]      (1/10スケール)
-     15万人 、1週間で、4.375[時間] (1/10スケール)
-     15万人 、6か月で、4.6875[日]  (1/10スケール)
-   * *)
 
   (* 設定の書き出し、とても てんたてぃぶ *)
   fun writeConf (conf:conf) f = let

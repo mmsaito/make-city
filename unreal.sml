@@ -750,6 +750,42 @@ structure Probe = struct
   fun reducePop' (city:city) = 
     Vector.map reducePop (#area city)
 
+  fun staticPlacePop kind (city:city) f = let
+    val selKind =
+      case kind
+        of Cram  => #cram  | Sch  => #sch  | Corp => #corp | Home => #home 
+         | Super => #super | Park => #park | Train => (fn _ => #[])
+    val boxes = 
+      Vector.map (fn area =>
+          Array.array(Vector.length (selKind (placeArea area)), 0)
+        ) (#area city)
+    val <- = fn ((a,i),d) => Array.update(a,i,d); infix 1 <-
+    val `$ = fn (a,i)     => (a,i); infix 9 `$
+    val $` = fn (a,i)     => Array.sub(a,i); infix 9 $`
+    (* ]‹Æˆõ”‚ð”‚¦‚½‚¢‚Ìad hoc‚È‚±‚Æ‚ð‚·‚é *)
+    fun findL c xs = (fn SOME x => [x] | _ => []) (List.find c xs)
+    fun return_after_save () = let
+      val sizes = Vector.map Array.vector boxes
+      val sortSizes = Misc.qsortV (fn (a,b) => Int.compare(b,a)) (sizes $ 4)
+      val os = TextIO.openOut f
+    in
+      (Vector.appi (fn (i,n) => TextIO.output(os, sI (i+1)^","^sI n^"\n")) sortSizes
+      ;TextIO.closeOut os
+      ;sizes
+      )
+    end
+  in
+   (Vector.app (fn area => 
+      List.app (fn PERSON person => 
+        List.app (fn {area_t, id, ...} =>
+          boxes $ area_t `$ id <- boxes $ area_t $` id + 1
+        ) (findL (fn {place_k,...} => place_k = kind) (#belong person))
+      ) (popArea area)
+    ) (#area city)
+   ; return_after_save()
+   )
+  end
+
   fun showPopTag os n = 
     (T.output(os,"t,")
     ;app (fn i => app (fn x => T.output(os, x ^ fI i ^ ",")) ["s","e","i","r"])
