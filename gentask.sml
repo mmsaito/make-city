@@ -309,6 +309,9 @@ structure Tasks3 = struct
   open GenTask
   open Type; infix 9 $;
   val nPop = #[571641, 176866, 138684, 314861, 44680]
+  fun mult {super, park, home, corp, school, train} (n:real) = 
+    {super=super*n, park=park*n, home=home, corp=corp*n, school=school*n, train=train*n}
+
   val reproNum3 = {super = 0.3, park = 0.5, home = 1.5, corp = 4.0, school = 5.0, train = 6.0}
   val reproNum4 = {super = 0.3, park = 0.5, home = 1.5, corp = 3.0, school = 4.0, train = 6.0}
   val reproNum5 = {super = 0.3, park = 0.5, home = 1.2, corp = 1.5, school = 1.8, train = 3.0}

@@ -251,9 +251,14 @@ structure Trivial = struct
     fun selMyCorp () = let
       val corp = #corp (rndSelLP rnd prCorpArea)
       val n    = rI (Vector.length corp)
-      val idxSel = paretoSel {alpha = 1.0, gamma = 1e4, n = n - 20.0, m = 20.0, beta = 2.0}
+      val idxSel = paretoSel {alpha = 1.0, gamma = 1e3, n = n - 19.0, m = 20.0, beta = 2.0}
+        handle s => (print "some exception arise!\n"; raise s)
+      fun gard i = 
+        if i < 0 then (print (sI i); 0)
+        else if i >= iR n then (print (sI i); 0)
+        else i
     in
-      corp $ (idxSel rnd)
+      corp $ (gard (idxSel rnd))
     end
 
     (* 外勤先はランダムに選択 *)
@@ -285,7 +290,7 @@ structure Trivial = struct
     case #role p
       (* 23.2.18 外勤の実験。とりあえず、コード改変でやってみる。*)
       (* of Employed => map #id [selCorp(), rndSelV rnd (#super a0)] *)
-      of Employed => map #id (rndSelV rnd (#super a0) :: selCorp 5)
+      of Employed => map #id (rndSelV rnd (#super a0) :: selCorp 1)
        | Student  => map #id (selCram() `:: [selSch (), rndSelV rnd (#super a0)])
        | HausFrau => map #id [rndSelV rnd (#super a0), rndSelV rnd (#super a'), rndSelV rnd (#park a0) ]
   end
