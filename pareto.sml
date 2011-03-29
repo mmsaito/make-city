@@ -30,12 +30,12 @@ in
   end
 end
 
-val n = 20000
+val n = 2000
 val m = 222892
 
 val box = Array.array(n, 0)
-val idxSel = paretoSel' {alpha = 1.0, gamma = 10000.0, beta=2.0
-  , n = Real.fromInt n - 20.0, m = 20.0}
+val idxSel = paretoSel' {alpha = 1.0, gamma = 100.0, beta=2.0
+  , n = Real.fromInt n - 1.0, m = 0.0}
 val idx = List.tabulate(m, fn _ => idxSel rnd)
 val () = app (fn idx => Array.update(box,idx,Array.sub(box,idx)+1)
  handle _ => print (Int.toString idx)

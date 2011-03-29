@@ -323,6 +323,7 @@ structure Tasks3 = struct
      ,{sch = 29, corp =20, cram = 1, super = 10, park = 2}
      ,{sch =  8, corp =20, cram = 0, super = 10, park = 2}
      ]
+
   val nPlaces2 = 
     #[{sch = 28, corp = 1, cram = 0, super = 10, park = 2}
      ,{sch = 28, corp = 1, cram = 1, super = 10, park = 2}
@@ -330,6 +331,7 @@ structure Tasks3 = struct
      ,{sch = 28, corp =20, cram = 1, super = 10, park = 2}
      ,{sch = 28, corp =20, cram = 0, super = 10, park = 2}
      ]
+
   val nPlaces3 = 
     #[{sch = 28, corp = 1000, cram = 0, super = 10, park = 2}
      ,{sch = 28, corp = 1000, cram = 1, super = 10, park = 2}
@@ -337,6 +339,15 @@ structure Tasks3 = struct
      ,{sch = 28, corp =20000, cram = 1, super = 10, park = 2}
      ,{sch = 28, corp =20000, cram = 0, super = 10, park = 2}
      ]
+
+  val nPlaces4 = 
+    #[{sch = 28, corp =  100, cram = 0, super = 10, park = 2}
+     ,{sch = 28, corp =  100, cram = 1, super = 10, park = 2}
+     ,{sch = 28, corp =  100, cram = 0, super = 10, park = 2}
+     ,{sch = 28, corp = 2000, cram = 1, super = 10, park = 2}
+     ,{sch = 28, corp = 2000, cram = 0, super = 10, park = 2}
+     ]
+
   fun genConf
     {rr = {super, park, home, corp, school, train}
     ,nPlaces

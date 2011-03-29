@@ -251,7 +251,7 @@ structure Trivial = struct
     fun selMyCorp () = let
       val corp = #corp (rndSelLP rnd prCorpArea)
       val n    = rI (Vector.length corp)
-      val idxSel = paretoSel {alpha = 1.0, gamma = 1e3, n = n - 19.0, m = 20.0, beta = 2.0}
+      val idxSel = paretoSel {alpha = 1.0, gamma = 100.0, n = n - 1.0, m = 0.0, beta = 2.0}
         handle s => (print "some exception arise!\n"; raise s)
       fun gard i = 
         if i < 0 then (print (sI i); 0)
