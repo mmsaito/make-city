@@ -12,6 +12,7 @@ Library
     structure Tasks2
     structure Tasks3
     structure JCL1
+    structure ReducePlacewise
 is
     $/basis.cm
     $/smlnj-lib.cm
@@ -24,3 +25,4 @@ is
     model1.sml
     jcl1.sml
     gentask.sml
+    reduce_placewise.sml

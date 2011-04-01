@@ -102,23 +102,27 @@ popplot1 <- function(x,offset,ylab,maxday,conf,maxE)
                  ,rgb(64/256,32/256,240/256)
                  ,rgb(32/256,192/256,144/256)
                  ,rgb(240/256,64/256,220/256)
-                 ,rgb(108/256,96/256,96/256)
                  )
 
 
     matplot(t,e,main="e",type="l", xlim=c(0,maxday),ylim=c(0,1.5*maxE_),ylab=ylab,xlab="time [days]"
            ,lty=1
-           ,lwd=c(3,2,2,2,2,2)
+           ,lwd=#c(3,2,2,2,2,2)
+                c(2,1,1,1,1,1)
            ,col=col
+           ,cex.axis=2, cex.lab=2
            )
-    legend(maxday*0.8 
+    legend(maxday*0
           ,1.5*maxE_
-          ,c("八王子","立川","吉祥寺","新宿","東京","合計/2")
+          , #c("八王子","立川","吉祥寺","新宿","東京","合計/2")
+            #c("0.5*TOTAL", "HACHIOJI","TACHIKAWA","KICHIJOJI","SHINJUKU","TOKYO")
+            c("0.5*TOTAL", "TOWN A","TOWN B","TOWN C","TOWN D","TOWN E")
           ,lty=1
+          ,cex=2
           ,lwd=c(2,2,2,2,2,2)
           ,col=col
           )
-    if (!missing(conf)) {
+    if (!missing(conf) & FALSE) {
         legend(maxday*0.69,1.0*maxE_, paste(names(conf), conf))
     }
 }
@@ -136,9 +140,9 @@ popplot <- function(x,maxday,conf,tag,toFile,maxE)
 	dv = dev.list() 
     } else {
       dv <- c(0,0)
-      png(paste("R_",tag,".png",sep=""))
+      png(paste("R_",tag,".png",sep=""), width=960, height=960)
       dv[1] <- dev.cur()
-      png(paste("E_",tag,".png",sep=""))
+      png(paste("E_",tag,".png",sep=""), width=960, height=960)
       dv[2] <- dev.cur()
     }
 
@@ -147,7 +151,7 @@ popplot <- function(x,maxday,conf,tag,toFile,maxE)
     if   (!missing(tag) && !toFile) {savePlot(file = paste("R_",tag,".png",sep=""), type="png")}
 
     dev.set(dv[2])  
-    popplot1(x,3,"E",maxday,conf,maxE)
+    popplot1(x,3,"exposed persons",maxday,conf,maxE)
     if (!missing(tag) && !toFile) {savePlot(file = paste("E_",tag,".png",sep=""), type="png")}
     
     if (!(missing(toFile) || !toFile)) {
@@ -178,11 +182,12 @@ popplot <- function(x,maxday,conf,tag,toFile,maxE)
 #   }
 }
 
-popplotf <- function(tag,maxday)
+popplotf <- function(tag,maxday,maxE)
 {
    x <- read.csv(paste("pop_",tag,".csv",sep=""))
-   conf <- read.csv(paste("conf_",tag,".csv",sep=""),row.name=1,header=F)
-   popplot(x,maxday,confcnv(conf),tag,TRUE)
+#   conf <- read.csv(paste("conf_",tag,".csv",sep=""),row.name=1,header=F)
+   conf <- NULL
+   popplot(x,maxday,confcnv(conf),tag,TRUE,maxE)
 }
 
 # tag = フォルダ名として、これを使え!!

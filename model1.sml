@@ -254,8 +254,8 @@ structure Trivial = struct
       val idxSel = paretoSel {alpha = 1.0, gamma = 100.0, n = n - 1.0, m = 0.0, beta = 2.0}
         handle s => (print "some exception arise!\n"; raise s)
       fun gard i = 
-        if i < 0 then (print (sI i); 0)
-        else if i >= iR n then (print (sI i); 0)
+        if i < 0 then (print ("parato[" ^ sI i ^ "] "); 0)
+        else if i >= iR n then (print ("parato[" ^ sI i ^"] "); 0)
         else i
     in
       corp $ (gard (idxSel rnd))
@@ -372,11 +372,14 @@ structure Trivial = struct
     val vac: area -> area =
       F.vacWho (fn p => F.ruleVacTrain  {cover = #vacTrCover  conf, eff = #vacEff conf} p orelse 
                         F.ruleVacSchool {cover = #vacSchCover conf, eff = #vacEff conf} p)
-    val nInf = #n (#infectRule conf)
-    val rule = #rule (#infectRule conf)
+
     (* 注意: ここの抽出方法の違い(決定的/ランダム)の対応は、非常に場当たり的なものである *)
-    fun infect (area:area) = 
-      case #isRandom (#infectRule conf)
+    fun infect infectRule (area:area) = let
+      val nInf = #n infectRule
+      val rule = #rule infectRule
+      val () = print (Bool.toString (#isRandom (#infectRule conf)))
+    in
+      case #isRandom infectRule
         of false => F.ruleInfect nInf rule area
          | true  =>
             (case #livein rule
@@ -388,8 +391,15 @@ structure Trivial = struct
                    F.distInfect rnd [(nInf div 5, INF 0)] area
                    (* マジックナンバー 5 = 都市数 *)
             )
+    end
+    and infect' (area:area) = 
+      case Unsafe.Object.rep (Unsafe.Object.toObject (#infectRule conf))
+        of Unsafe.Object.Pair =>
+           foldl (fn (infectRule,area) => infect infectRule area) 
+             area (Unsafe.cast (#infectRule conf))
+         | _      => infect (#infectRule conf) area
   in
-    {area  = Vector.map (infect o vac) (#area city)
+    {area  = Vector.map (infect' o vac) (#area city)
     ,train = #train city
     ,time  = #time city
     }

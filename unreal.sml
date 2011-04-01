@@ -417,7 +417,12 @@ structure Frame = struct
     val per = #2 area
     val (modified, rest) = 
       foldl (fn ((n,stat),(modified, per)) => 
-        let val (target,per) = uniqRndSample rnd per n in  
+        let val (target,per) = uniqRndSample rnd per n 
+          handle e => 
+           (print ("distInfect: #per = " ^ sI (length per)
+             ^ "," ^ "n = " ^ sI n ^"\n")
+           ;raise e)
+        in  
           (map 
             (fn (PERSON p:person) => PERSON
               { age    = #age p
@@ -431,9 +436,9 @@ structure Frame = struct
                     then #health p
                     else stat :: tl (#health p)
               , mkSched = #mkSched p
-              , sched    = #sched p
+              , sched   = #sched p
               }:person
-          ) target :: modified
+            ) target :: modified
           ,per)
         end
       ) (nil: person list list,per: person list) rules

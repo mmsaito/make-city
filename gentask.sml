@@ -348,9 +348,29 @@ structure Tasks3 = struct
      ,{sch = 28, corp = 2000, cram = 0, super = 10, park = 2}
      ]
 
+  val infEMP30 = 
+       {tag = "EMP_30_JOJ_SJK"
+        ,n    = 30
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME JOJ
+                ,workat = WOR_SOME [(SJK,Corp)]
+                }
+        ,isRandom = false
+        } 
+  val infSCH30 = 
+       {tag = "SCH_30_JOJ_SJK"
+        ,n    = 30
+        ,rule = {role   = ROL_SOME Student
+                ,livein = LIV_SOME JOJ
+                ,workat = WOR_ARBIT 
+                }
+        ,isRandom = false
+        } 
+ 
   fun genConf
     {rr = {super, park, home, corp, school, train}
     ,nPlaces
+    ,inf
     }
   = {betaNSuper = super  * Type.gamma
     ,betaNPark  = park   * Type.gamma
@@ -358,7 +378,7 @@ structure Tasks3 = struct
     ,betaNCorp  = corp   * Type.gamma
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
-    ,infectRule = List.nth(Tasks1.infRules1, 0)
+    ,infectRule = inf 
     ,vacEff     = 0.0
     ,vacTrCover = 0.0
     ,vacSchCover= 0.0
@@ -367,7 +387,7 @@ structure Tasks3 = struct
     ,tag        = 
       String.concatWith "_" 
         ( map Real.toString [super,park,home,corp,school,train]
-        @ [#tag (List.nth(Tasks1.infRules1, 0))]
+        @ [#tag (List.nth(Tasks1.infRules1, 0))]  (* Ç±Ç±èCê≥ïKóv *)
         @ Misc.listV (Vector.map Alice.sI (nPop))
         )
     ,mcid       = getOpt (NONE, "0")
