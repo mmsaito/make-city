@@ -46,6 +46,7 @@ structure JCL1 = struct
   fun makeWriteInterv (conf) (city:city) subtag = let
     open Alice
     val interv = Trivial.mkIntervPlan conf city
+    val () = X_Misc.mkDir (!outbase^"/"^(#tag conf)^"/"^subtag)
   in
     Trivial.writeIntervPlan interv (!outbase^"/"^(#tag conf)^"/"^subtag^"/interv.csv")
   end
