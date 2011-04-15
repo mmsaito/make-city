@@ -15,9 +15,11 @@ structure JCL1 = struct
     val tagbase  = #tag conf
     val tag      = #tag conf ^ "@" ^ #mcid conf
     val _ = appIf mpi MPI.barrier MPI.COMM_WORLD
+    val outdir = !outbase^"/"^tagbase
+    val _ = print ("outdir = "^outdir^ "\n")
     val _ = 
       if valOf (Int.fromString (#mcid conf)) = 0
-        then X_Misc.mkDir (!outbase^"/"^tagbase) handle _ => () 
+        then X_Misc.mkDir outdir handle _ => (print ("Can't dig " ^ outdir^ "\n"))
         else ()
     val _ = appIf mpi MPI.barrier MPI.COMM_WORLD
 
@@ -45,7 +47,7 @@ structure JCL1 = struct
     open Alice
     val interv = Trivial.mkIntervPlan conf city
   in
-    Trivial.writeIntervPlan interv (!outbase^"/"^(#tag conf)^"/interv@"^ subtag ^".csv")
+    Trivial.writeIntervPlan interv (!outbase^"/"^(#tag conf)^"/"^subtag^"/interv.csv")
   end
 
   fun main offset = let

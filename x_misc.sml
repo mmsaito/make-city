@@ -129,7 +129,7 @@ in
 
   fun mkDir path = let
     val org = OS.FileSys.getDir()
-    val arcs = CSV.split {seps="/\\", spcs=""} path
+    val arcs = CSV.split {spcs="/\\", seps=""} path
     fun dig (x::xs) = 
       (OS.FileSys.mkDir x handle _ => (); OS.FileSys.chDir x; dig xs; OS.FileSys.chDir "../")
       | dig nil = ()
