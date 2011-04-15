@@ -6,7 +6,7 @@ structure JCL1 = struct
   open Type
   val tasks   = Tasks2.tasks1 @ Tasks2.tasks2
   val tStop   = 360*Type.days';
-  val outbase = "../code-unreal-2/test/scale2/xx"
+  val outbase = ref "../code-unreal-2/test/scale2000"
 
   fun evalConf {saveCity:bool, run:bool, mpi: bool} conf = let
     fun appIf true  f a = SOME (f a)
@@ -17,7 +17,7 @@ structure JCL1 = struct
     val _ = appIf mpi MPI.barrier MPI.COMM_WORLD
     val _ = 
       if valOf (Int.fromString (#mcid conf)) = 0
-        then X_Misc.mkDir (outbase^"/"^tagbase) handle _ => () 
+        then X_Misc.mkDir (!outbase^"/"^tagbase) handle _ => () 
         else ()
     val _ = appIf mpi MPI.barrier MPI.COMM_WORLD
 
@@ -27,16 +27,25 @@ structure JCL1 = struct
 
     (* シミュレーション中はMonte Carlo実験毎に違う乱数列を使う *)
     val _ = Trivial.inirnd (Alice.iS (#mcid conf))
-    val city = Trivial.infectVac conf city
+    (* val city = Trivial.infectVac conf city *)
+    val interv = Trivial.mkIntervPlan conf city
 
-    val _ = appIf saveCity (Probe.writeCity city) (outbase^"/"^tagbase^".city")
+    val _ = appIf saveCity (Probe.writeCity city) (!outbase^"/"^tagbase^"/model.city")
   in
     if run then
       Trivial.run1 {conf=conf, recstep=180, tStop=tStop, tag=tag
-                   ,dir=outbase^"/"^tagbase, city=city
+                   ,dir= !outbase^"/"^tagbase, city=city
                    ,seq=true}
     else
       city
+  end
+  val makeWriteCity = evalConf {saveCity=true, run=false, mpi=false}
+
+  fun makeWriteInterv (conf) (city:city) subtag = let
+    open Alice
+    val interv = Trivial.mkIntervPlan conf city
+  in
+    Trivial.writeIntervPlan interv (!outbase^"/"^(#tag conf)^"/interv@"^ subtag ^".csv")
   end
 
   fun main offset = let

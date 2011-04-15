@@ -206,11 +206,17 @@ structure Type = struct
     fun setVacEff x = vacEff__ := SOME x
   end
 
-  (* 行動パターンによる検索に使う型 *)
+  (* 介入対象クエリー *)
   datatype roleOpt   = ROL_ARBIT | ROL_SOME of role
   datatype liveinOpt = LIV_ARBIT | LIV_SOME of area_t  (* for livein *)
   datatype workatOpt = WOR_ARBIT | WOR_LOCAL | WOR_SOME of (area_t * place_k) list
   type belongSpec = {role: roleOpt, livein: liveinOpt, workat: workatOpt}
+  datatype intervOpt = OPT_INTERV_INF | OPT_INTERV_VAC
+
+  (* 介入計画リスト *)
+  datatype interv 
+    = INTERV_INF of {time:int, area_t:int, person: int}
+    | INTERV_VAC of {time:int, area_t:int, person: int, eff: real}
 end
 
 structure Frame = struct
@@ -377,7 +383,7 @@ structure Frame = struct
       | eqLive (LIV_SOME x, y) = x = y
     fun eqWork (WOR_LOCAL , ys) = List.all (fn ({area_t,...}:place_t) => area_t = hometown) ys
       | eqWork (WOR_ARBIT , _ ) = true
-      | eqWork (WOR_SOME xs,ys) = 
+      | eqWork (WOR_SOME xs,ys) = (* ToDo: 一般の集合演算が書けないといけない *)
       List.all (fn (area_t':area_t,place_k':place_k) => 
         List.exists (fn ({area_t,place_k,...}: place_t) =>
           area_t = area_t' andalso place_k = place_k') ys) xs
@@ -472,6 +478,26 @@ structure Frame = struct
         else p
   in
     (#1 area, map setExposedIf (#2 area),#3 area): area
+  end
+
+  fun vacEff age =
+    if      0.0 <= age andalso age < 5.0  then 0.6
+    else if 5.0 <= age andalso age < 65.0 then 0.8
+    else                                       0.5
+
+  (* 介入を受ける人のリストをつくる *)
+  fun ruleInterv {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} (area:area) = let 
+    fun add (id, PERSON p:person) =
+      case kind 
+        of OPT_INTERV_INF => INTERV_INF {time=time, area_t = idArea area, person = id}
+         | OPT_INTERV_VAC => INTERV_VAC {time=time, area_t = idArea area, person = id, eff = vacEff (#age p)}
+    val n' = ref n
+    fun matchAdd (id, p, xs:interv list) = 
+      if (!n' > 0 andalso matchBelongSpec rule p) 
+        then add (id,p) :: xs  before n' := !n' - 1
+        else xs
+  in
+    Misc.foldliL matchAdd nil (popArea area)
   end
 
   (* 8. ワクチン接種 *)

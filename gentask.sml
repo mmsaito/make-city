@@ -49,6 +49,7 @@ structure GenTask = struct
   ,betaNCorp  = #betaNCorp x
   ,betaNTrain = #betaNTrain x
   ,infectRule = #infectRule x
+  ,intervRule = #intervRule x
   ,nPop       = #nPop x
   ,nPlaces    = #nPlaces x
   ,tag        = #tag x    
@@ -126,6 +127,7 @@ structure Tasks1 = struct
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
     ,infectRule = infectRule
+    ,intervRule = nil
     ,vacEff     = vacEff
     ,vacTrCover = vacTrCover
     ,vacSchCover= vacSchCover
@@ -283,6 +285,7 @@ structure Tasks2 = struct
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
     ,infectRule = List.nth(Tasks1.infRules1, 0)
+    ,intervRule = nil
     ,vacEff     = 0.0
     ,vacTrCover = 0.0
     ,vacSchCover= 0.0
@@ -348,29 +351,53 @@ structure Tasks3 = struct
      ,{sch = 28, corp = 2000, cram = 0, super = 10, park = 2}
      ]
 
-  val infEMP30 = 
-       {tag = "EMP_30_JOJ_SJK"
-        ,n    = 30
+  val dummyINF = 
+       {tag = ""
+        ,n    = 0
         ,rule = {role   = ROL_SOME Employed
                 ,livein = LIV_SOME JOJ
                 ,workat = WOR_SOME [(SJK,Corp)]
                 }
         ,isRandom = false
         } 
-  val infSCH30 = 
-       {tag = "SCH_30_JOJ_SJK"
+
+  val infEMP = 
+       {kind = OPT_INTERV_INF
+       ,n    = 30
+       ,rule = {role   = ROL_SOME Employed
+               ,livein = LIV_SOME JOJ
+               ,workat = WOR_SOME [(SJK,Corp)]
+               }
+       ,time = 0
+       ,isRandom = false
+       ,tag  = "EMP30J2S"
+       } 
+  val infSCH = 
+        {kind = OPT_INTERV_INF
         ,n    = 30
         ,rule = {role   = ROL_SOME Student
                 ,livein = LIV_SOME JOJ
                 ,workat = WOR_ARBIT 
                 }
+        ,time = 0
         ,isRandom = false
-        } 
- 
+        ,tag = "SCH30J2S"
+        }
+  val vacTAC =
+        {kind = OPT_INTERV_VAC
+        ,n    = 5000
+        ,rule = {role   = ROL_SOME Employed
+                ,livein = LIV_SOME TAC
+                ,workat = WOR_SOME [(TKY,Corp),(SJK,Corp),(JOJ,Corp),(HAC,Corp)]
+                }
+        ,time = 1440*3
+        ,isRandom = false
+        ,tag = "VAC5000TAC"
+        }
+
   fun genConf
     {rr = {super, park, home, corp, school, train}
     ,nPlaces
-    ,inf
     }
   = {betaNSuper = super  * Type.gamma
     ,betaNPark  = park   * Type.gamma
@@ -378,7 +405,8 @@ structure Tasks3 = struct
     ,betaNCorp  = corp   * Type.gamma
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
-    ,infectRule = inf 
+    ,infectRule = dummyINF (* ‚µ‚Î‚ç‚­‚µ‚½‚ç”pŽ~‚·‚é *)
+    ,intervRule = [infEMP, infSCH, vacTAC]
     ,vacEff     = 0.0
     ,vacTrCover = 0.0
     ,vacSchCover= 0.0

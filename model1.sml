@@ -28,6 +28,7 @@ structure Trivial = struct
     ,betaNPark  : real
     ,betaNTrain : real
     ,infectRule : {tag:string, n:int, rule:belongSpec, isRandom:bool}
+    ,intervRule : {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} list
     ,nPlaces    : {cram:int, sch:int, corp:int, park:int, super:int} vector
     ,nPop       : int vector (* ひとつの街の人口。後で配列にする *)
     ,vacEff     : real (* ワクチン効果 *)
@@ -405,12 +406,39 @@ structure Trivial = struct
     }
   end
 
+
   fun city (conf:conf) = 
     F.evalPlace
       {area  = F.makeVisit' (area conf) ruleVisit
       ,train = train conf
       ,time  = 0
       }
+
+  (* ルールに従って、いろんな介入計画表をつくる *)
+  fun mkIntervPlan (conf:conf) (city:city) = let
+    val rnd = getrnd()
+    fun interv intervRule (area:area) = let
+    in
+      case #isRandom intervRule
+        of false => F.ruleInterv intervRule area
+         | true  => (print "Random selection is not implemented!\n"; raise Undef)
+    end
+    and interv' (area:area) = 
+      List.concat (map (fn rule => interv rule area) (#intervRule conf))
+  in
+    Vector.foldl (fn (a,xs) => interv' a @ xs) nil (#area city)
+  end
+
+  fun writeIntervPlan (xs: interv list) f = let
+    val os = T.openOut f
+    fun wrt (INTERV_VAC {time:int, area_t: int, person: int, eff: real}) =
+      T.output(os, "VAC"^","^sI time^","^sI area_t^","^sI person^","^sR eff^"\n")
+      | wrt (INTERV_INF {time:int, area_t: int, person: int}) =
+      T.output(os, "INF"^","^sI time^","^sI area_t^","^sI person^"\n")
+  in
+    (T.output(os, sI(length xs)^"\n"); app wrt xs; T.closeOut os)
+  end
+
 
   (* 設定の書き出し、とても てんたてぃぶ *)
   fun writeConf (conf:conf) f = let
