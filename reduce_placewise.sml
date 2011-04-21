@@ -15,10 +15,11 @@ structure ReducePlacewise = struct
   val idxHome  = 3
   val idxSuper = 4
   val idxPark  = 5
+  val idxTrain = 6
   fun readH is = let
     val _ = T.inputLine is
     val nAreas = iS (hd (valOf (readCsvLine is)))
-    val nKinds = 6  (* Train is excluded *)
+    val nKinds = 7
     fun readArea i = let
       val sizes = Array.array (nKinds, 0)
       fun loop () =
@@ -29,6 +30,7 @@ structure ReducePlacewise = struct
            | n :: "nSuper":: _ => (Array.update(sizes, idxSuper, iS n);loop())
            | n :: "nPark" :: _ => (Array.update(sizes, idxPark , iS n);loop())
            | n :: "nHome" :: _ => (Array.update(sizes, idxHome , iS n);loop())
+           | n :: "nTrain" :: _ => (Array.update(sizes, idxTrain , iS n);loop())
            | "--" :: _     => ()
            | _             => loop()
     in
@@ -111,6 +113,8 @@ structure ReducePlacewise = struct
       ;T.output(os,"\n"))
     ) v
   val writeSeqIV = writeSeqSEIRV #i
+  fun writeSeqSEIRVF sel v f =
+    (fn os => (writeSeqSEIRV sel os v; TextIO.closeOut os)) (TextIO.openOut f)
 
   fun writeSeqReproNumV os (v: place_t vector) kind  = 
     Vector.app (fn {seq,peak} => 
