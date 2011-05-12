@@ -72,7 +72,7 @@ structure Type = struct
   (* 人間 *)
   type age  = real
   datatype gender  = F | M
-  datatype role    = Employed | Hausfrau | Student
+  datatype role    = Employed | Hausfrau | Student | Patient | Doctor
   datatype health
     = SUS         (* 免疫なし *)
     | EXP of time (* 時刻 _で感染した *)
@@ -93,7 +93,7 @@ structure Type = struct
     val SJK = 3:area_t
     val TKY = 4:area_t
 
-  datatype place_k = Cram | Sch | Corp | Home | Super | Park | Train
+  datatype place_k = Cram | Sch | Corp | Home | Super | Park | Train | Hosp
 
   (* 場所を特定するタプル *)
   (* 【実装上の注意】
@@ -148,6 +148,7 @@ structure Type = struct
     , park : place vector
     , super: place vector
     , home : place vector
+    , hosp : place vector
     }
     (* 中間構造体 *)
     type places1 =
@@ -181,6 +182,7 @@ structure Type = struct
        | Cram  => (#cram  o #3) (areas $ area_t) $ id
        | Park  => (#park  o #3) (areas $ area_t) $ id
        | Super => (#super o #3) (areas $ area_t) $ id
+       | Hosp  => (#hosp  o #3) (areas $ area_t) $ id
        | Train => raise undef () (* unreachable *)
 
   (* 乱数のシードの設定 *)
@@ -216,7 +218,9 @@ structure Type = struct
   (* 介入計画リスト *)
   datatype interv 
     = INTERV_INF of {time:int, area_t:int, person: int}
-    | INTERV_VAC of {time:int, area_t:int, person: int, eff: real}
+    | INTERV_VAC of {time:int, area_t:int, person: int
+                    ,response: real
+                    ,hyposensitize: real}
 end
 
 structure Frame = struct
@@ -303,6 +307,7 @@ structure Frame = struct
     ,super = filter (is Super) places
     ,park  = filter (is Park ) places
     ,home  = home
+    ,hosp  = #[]
     }
   end
 
@@ -377,6 +382,8 @@ structure Frame = struct
   fun matchBelongSpec ({role, livein, workat}: belongSpec) (PERSON p) = let
     val isHome = fn ({place_k = Home, ...}:place_t) => true | _ => false
     val hometown = #area_t (valOf (List.find isHome (#belong p)))
+      handle _ => (print "warning: homeless agent. forcing their hometown to be 0-th one.\n"
+                  ;0)
     fun eqRole (ROL_ARBIT, _) = true
       | eqRole (ROL_SOME x, y) = x = y
     fun eqLive (LIV_ARBIT, _) = true
@@ -480,17 +487,33 @@ structure Frame = struct
     (#1 area, map setExposedIf (#2 area),#3 area): area
   end
 
-  fun vacEff age =
+  (* ワクチンの効果 ***********************************************)
+  (*  -- モデルファイルに書くべき *)
+  (* ワクチン奏功率 *)
+  fun vacResponse age =
     if      0.0 <= age andalso age < 5.0  then 0.6
     else if 5.0 <= age andalso age < 65.0 then 0.8
     else                                       0.5
+  (* ワクチンによる減感作率 ------- これはダミー *)
+  fun vacHyposensitize age =
+    if      0.0 <= age andalso age < 5.0  then 0.8
+    else if 5.0 <= age andalso age < 65.0 then 0.4
+    else                                       0.8
+
+  (****************************************************************)
 
   (* 介入を受ける人のリストをつくる *)
   fun ruleInterv {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} (area:area) = let 
     fun add (id, PERSON p:person) =
       case kind 
         of OPT_INTERV_INF => INTERV_INF {time=time, area_t = idArea area, person = id}
-         | OPT_INTERV_VAC => INTERV_VAC {time=time, area_t = idArea area, person = id, eff = vacEff (#age p)}
+         | OPT_INTERV_VAC => 
+             INTERV_VAC {time          = time
+                        ,area_t        = idArea area
+                        ,person        = id
+                        ,response      = vacResponse (#age p)
+                        ,hyposensitize = vacHyposensitize (#age p)
+                        }
     val n' = ref n
     fun matchAdd (id, p, xs:interv list) = 
       if (!n' > 0 andalso matchBelongSpec rule p) 
@@ -573,6 +596,8 @@ structure Frame = struct
                of Employed => TextIO.output(os,"E")
                 | Hausfrau => TextIO.output(os,"H")
                 | Student  => TextIO.output(os,"S")
+                | Patient  => TextIO.output(os,"P")
+                | Doctor   => TextIO.output(os,"D")
              )
     fun redu_s2e() = 
       if List.exists (fn VAC _ => true | _ => false) (#health p) then
@@ -701,6 +726,7 @@ structure Frame = struct
             ,park  = Vector.map estTransitP (#park  places)
             ,super = Vector.map estTransitP (#super places)
             ,home  = Vector.map estTransitP (#home  places)
+            ,hosp  = Vector.map estTransitP (#hosp  places)
             }
           )
        ) area
@@ -786,6 +812,7 @@ structure Probe = struct
       case kind
         of Cram  => #cram  | Sch  => #sch  | Corp => #corp | Home => #home 
          | Super => #super | Park => #park | Train => (fn _ => #[])
+         | Hosp  => #hosp
     val boxes = 
       Vector.map (fn area =>
           Array.array(Vector.length (selKind (placeArea area)), 0)
@@ -838,6 +865,7 @@ structure Probe = struct
     | showPlace_k Super = "4"
     | showPlace_k Park  = "5"
     | showPlace_k Train = "6"
+    | showPlace_k Hosp  = "7"
 
   fun showPlace_t ({area_t,id,place_k,...}:place_t) = 
     fI area_t ^ "," ^ fI id ^ "," ^ showPlace_k place_k ^ ","
@@ -846,6 +874,8 @@ structure Probe = struct
   fun showRole Employed = "Employed" 
     | showRole Hausfrau = "Hausfrau" 
     | showRole Student  = "Student" 
+    | showRole Patient  = "Patient"
+    | showRole Doctor   = "Doctor"
 
   fun showHealth SUS        = "SUS," ^ "0" (* dummy *)
     | showHealth (EXP time) = "EXP," ^ sI time
@@ -860,6 +890,7 @@ structure Probe = struct
     | showPlace_k' Super = "Super"
     | showPlace_k' Park  = "Park"
     | showPlace_k' Train = "Train"
+    | showPlace_k' Hosp  = "Hosp"
 
   fun showPlace_t' ({area_t, place_k, id, ...}: place_t) =
     String.concat [sI area_t,",", showPlace_k' place_k,",", sI id]
@@ -875,8 +906,8 @@ structure Probe = struct
 
     val w_place_t = w' o showPlace_t' 
 
-    fun w_person (PERSON {role, belong, visit, dest, health, ...}) = 
-      (w' (showRole role) 
+    fun w_person (PERSON {age, role, belong, visit, dest, health, ...}) = 
+      (w_ (showRole role); w' (sR age)
       ;w' "belong:"; w (sI o length @@ belong); w' ",length"
       ;app w_place_t belong
       ;w' "health:"
@@ -889,7 +920,7 @@ structure Probe = struct
       ;w' (sR (#betaN pl))
       )
 
-    fun w_place_group({cram,sch,corp,park,super,home}:places) =
+    fun w_place_group({cram,sch,corp,park,super,home,hosp}:places) =
       (w' (showPlace_k' Cram); w (sI o Vector.length @@ cram); w' ",length"
       ;Vector.app w_place cram
 
@@ -907,6 +938,9 @@ structure Probe = struct
 
       ;w' (showPlace_k' Home); w (sI o Vector.length @@ home); w' ",length" 
       ;Vector.app w_place home
+
+      ;w' (showPlace_k' Hosp); w (sI o Vector.length @@ hosp); w' ",length" 
+      ;Vector.app w_place hosp
       )
 
     fun w_train({id: place_t, nVis: nVis, size: size, betaN: real, pTrns:pTrns
@@ -923,7 +957,7 @@ structure Probe = struct
      (w' (sI (#1 area) ^ ", id" ) (* id *)
      ;w' "person:"; w' (sI (length (#2 area)))
      ;List.app w_person (#2 area)
-     ;w' "place-group:"; w (sI 6); w' ",length" (* type places *)
+     ;w' "place-group:"; w (sI 7); w' ",length" (* type places *)
      ;w_place_group (#3 area)
      )
     fun w_time(time:time) = w' (sI time)
@@ -937,4 +971,16 @@ structure Probe = struct
     ;TextIO.closeOut os
     )
   end
+
+  fun writeIntervPlan (xs: interv list) f = let
+    val os = T.openOut f
+    fun wrt (INTERV_VAC {time:int, area_t: int, person: int, response: real, hyposensitize: real}) =
+      T.output(os, "VAC"^","^sI time^","^sI area_t^","^sI person
+                 ^","^sR response^","^sR hyposensitize^"\n")
+      | wrt (INTERV_INF {time:int, area_t: int, person: int}) =
+      T.output(os, "INF"^","^sI time^","^sI area_t^","^sI person^"\n")
+  in
+    (T.output(os, sI(length xs)^"\n"); app wrt xs; T.closeOut os)
+  end
+
 end

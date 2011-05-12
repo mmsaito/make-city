@@ -48,7 +48,7 @@ structure JCL1 = struct
     val interv = Trivial.mkIntervPlan conf city
     val () = X_Misc.mkDir (!outbase^"/"^(#tag conf)^"/"^subtag)
   in
-    Trivial.writeIntervPlan interv (!outbase^"/"^(#tag conf)^"/"^subtag^"/interv.csv")
+    Probe.writeIntervPlan interv (!outbase^"/"^(#tag conf)^"/"^subtag^"/interv.csv")
   end
 
   fun main offset = let

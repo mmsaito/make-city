@@ -27,13 +27,15 @@ structure Trivial = struct
     ,betaNCorp  : real
     ,betaNPark  : real
     ,betaNTrain : real
+    ,betaNHosp  : real
     ,infectRule : {tag:string, n:int, rule:belongSpec, isRandom:bool}
     ,intervRule : {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} list
-    ,nPlaces    : {cram:int, sch:int, corp:int, park:int, super:int} vector
+    ,nPlaces    : {cram:int, sch:int, corp:int, park:int, super:int, hosp:int} vector
     ,nPop       : int vector (* ひとつの街の人口。後で配列にする *)
     ,vacEff     : real (* ワクチン効果 *)
     ,vacTrCover : real (* 接種実施率 *)
     ,vacSchCover: real (* 接種実施率 *)
+    ,hospPop    : {doc:int, inpat: int, outpat: int}
     ,tag        : string
     ,mcid       : string
     }
@@ -406,10 +408,93 @@ structure Trivial = struct
     }
   end
 
+  (* 病院の構成 *)
+  fun mkHospital {inpat:int, doc:int, outpat:int} nHosp beta (area:area) = let
+    fun loop (0, pop, popCooked, hosps) 
+      = ( idArea area
+        , List.concat (pop::rev popCooked)
+          (* 注: 変更したものを末尾にもってくるのは、mkHospitalをもう一度読んで、
+           * さらに病院を追加できるようにするため *)
+        , {cram  = #cram (placeArea area)
+          ,sch   = #sch (placeArea area)
+          ,corp  = #corp (placeArea area)
+          ,park  = #park (placeArea area)
+          ,super = #super (placeArea area)
+          ,home  = #home (placeArea area)
+          ,hosp  = Vector.fromList hosps
+          }
+        ): area
+      | loop (cnt, pop, popCooked, hosps) = let
+      val pDoc   = List.take (List.drop (pop, inpat), doc)
+      val pOutpat= List.take (List.drop (pop, inpat + doc), outpat)
+      val rest   = List.drop (pop, inpat + doc + outpat)
+      val hosp_t: place_t =  
+        {place_k = Hosp
+        ,area_t  = idArea area
+        ,id      = cnt - 1
+        ,tVis    = ref ~1
+        }
+      val hosp: place = 
+        {id    = hosp_t
+        ,betaN = beta
+        ,nVis  = zeroNVis()
+        ,size  = 0
+        ,pTrns = zeroPTrns()
+        }
+      fun asPatient (PERSON p) = PERSON
+      { age    = #age p
+      , gender = #gender p
+      , role   = Patient
+      , belong = [hosp_t] 
+      , visit  = hosp_t
+      , dest   = NONE
+      , health = #health p
+      , mkSched = fn _ => nil 
+      , sched   = nil
+      } 
+      val pInpat = map asPatient (List.take (pop, inpat))
+      val pop = List.drop (pop, inpat)
+     
+      fun asDoctor (PERSON p) = PERSON 
+      { age    = #age p
+      , gender = #gender p
+      , role   = Doctor
+      , belong = hosp_t :: List.filter (fn {place_k,...} => place_k <> Corp) (#belong p)
+      , visit  = #visit p
+      , dest   = #dest p
+      , health = #health p
+      (* さぼり:SML版でシミュレーションするときは別のものにする必要あり *)
+      , mkSched = #mkSched p 
+      , sched   = #sched p
+      }
+      val pDoc = map asDoctor (List.take (pop, doc))
+      val pop = List.drop (pop, doc)
+
+      fun asOutpat (PERSON p) = PERSON
+      { age    = #age p
+      , gender = #gender p
+      , role   = #role p
+      , belong = hosp_t :: #belong p
+      , visit  = #visit p
+      , dest   = #dest p
+      , health = #health p
+      , mkSched = #mkSched p 
+      , sched   = #sched p
+      }
+      val pOutpat = map asOutpat (List.take (pop, outpat))
+      val pop = List.drop (pop, doc)
+    in
+      loop (cnt - 1, pop, pInpat::pDoc::pOutpat::popCooked, hosp::hosps) 
+    end
+  in
+    loop (nHosp, popArea area, nil, nil)
+  end
 
   fun city (conf:conf) = 
     F.evalPlace
-      {area  = F.makeVisit' (area conf) ruleVisit
+      {area  = Vector.mapi (fn (i,area) =>
+           mkHospital (#hospPop conf) (#hosp (#nPlaces conf $ i)) (#betaNHosp conf) area
+         ) (F.makeVisit' (area conf) ruleVisit)
       ,train = train conf
       ,time  = 0
       }
@@ -427,16 +512,6 @@ structure Trivial = struct
       List.concat (map (fn rule => interv rule area) (#intervRule conf))
   in
     Vector.foldl (fn (a,xs) => interv' a @ xs) nil (#area city)
-  end
-
-  fun writeIntervPlan (xs: interv list) f = let
-    val os = T.openOut f
-    fun wrt (INTERV_VAC {time:int, area_t: int, person: int, eff: real}) =
-      T.output(os, "VAC"^","^sI time^","^sI area_t^","^sI person^","^sR eff^"\n")
-      | wrt (INTERV_INF {time:int, area_t: int, person: int}) =
-      T.output(os, "INF"^","^sI time^","^sI area_t^","^sI person^"\n")
-  in
-    (T.output(os, sI(length xs)^"\n"); app wrt xs; T.closeOut os)
   end
 
 
@@ -459,14 +534,28 @@ structure Trivial = struct
     fun roleSym Employed = #"E"
       | roleSym Hausfrau = #"H"
       | roleSym Student  = #"S"
+      | roleSym Patient  = #"P"
+      | roleSym Doctor   = #"D"
 
     fun symOrd (#"S",#"S") = EQUAL
       | symOrd (#"S",_   ) = GREATER
       | symOrd (#"E",#"S") = LESS
       | symOrd (#"E",#"E") = EQUAL
       | symOrd (#"E",_   ) = GREATER
+      | symOrd (#"H",#"S") = LESS
+      | symOrd (#"H",#"E") = LESS
       | symOrd (#"H",#"H") = EQUAL
-      | symOrd (#"H",_   ) = LESS
+      | symOrd (#"H",_   ) = GREATER
+      | symOrd (#"P",#"S") = LESS
+      | symOrd (#"P",#"E") = LESS
+      | symOrd (#"P",#"H") = LESS
+      | symOrd (#"P",#"P") = EQUAL
+      | symOrd (#"P",_   ) = GREATER
+      | symOrd (#"D",#"S") = LESS
+      | symOrd (#"D",#"E") = LESS
+      | symOrd (#"D",#"H") = LESS
+      | symOrd (#"D",#"P") = LESS
+      | symOrd (#"D",#"D") = EQUAL
 
     fun infSeq (city:city) = let
       fun inArea (area:area) = 

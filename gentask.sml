@@ -8,7 +8,7 @@ structure GenTask = struct
     ,betaNSch   = p3  * gamma
     ,betaNCorp  = p3  * gamma
     ,betaNTrain = p4  * gamma
-    ,infectID     = 30
+    ,infectID   = 30
     ,nPop       = 3000
     ,tag  = String.concatWith "_" (map Real.toString [p1,p2,p3,p4])
     ,mcid = let open StringCvt in padLeft #"0" 3 (Int.fmt DEC mcid) end
@@ -48,6 +48,7 @@ structure GenTask = struct
   ,betaNSch   = #betaNSch x
   ,betaNCorp  = #betaNCorp x
   ,betaNTrain = #betaNTrain x
+  ,betaNHosp  = #betaNHosp x
   ,infectRule = #infectRule x
   ,intervRule = #intervRule x
   ,nPop       = #nPop x
@@ -56,6 +57,7 @@ structure GenTask = struct
   ,vacEff     = #vacEff x
   ,vacTrCover = #vacTrCover x
   ,vacSchCover= #vacSchCover x
+  ,hospPop    = #hospPop x
   ,mcid       = Int.toString mcid
   }: Trivial.conf
 
@@ -105,11 +107,11 @@ structure Tasks1 = struct
   open Type
   val novac = {vacEff = 0.0, vacTrCover = 0.0, vacSchCover = 0.0}
   val nPlaces = 
-    #[{sch = 2, corp = 4, cram = 0, super = 10, park = 2}
-     ,{sch = 2, corp = 8, cram = 1, super = 10, park = 2}
-     ,{sch = 2, corp = 4, cram = 0, super = 10, park = 2}
-     ,{sch = 3, corp =30, cram = 1, super = 10, park = 2}
-     ,{sch = 2, corp =30, cram = 0, super = 10, park = 2}
+    #[{sch = 2, corp = 4, cram = 0, super = 10, park = 2, hosp=0}
+     ,{sch = 2, corp = 8, cram = 1, super = 10, park = 2, hosp=0}
+     ,{sch = 2, corp = 4, cram = 0, super = 10, park = 2, hosp=0}
+     ,{sch = 3, corp =30, cram = 1, super = 10, park = 2, hosp=0}
+     ,{sch = 2, corp =30, cram = 0, super = 10, park = 2, hosp=0}
      ]
 
   val reproNum3 = {super = 0.3, park = 0.5, home = 1.5, corp = 4.0, school = 5.0,train = 6.0}
@@ -126,12 +128,14 @@ structure Tasks1 = struct
     ,betaNCorp  = corp   * Type.gamma
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
+    ,betaNHosp  = 0.0
     ,infectRule = infectRule
     ,intervRule = nil
     ,vacEff     = vacEff
     ,vacTrCover = vacTrCover
     ,vacSchCover= vacSchCover
     ,nPop       = rep(5, 3000)
+    ,hospPop    = {doc = 0, inpat = 0, outpat = 0}
     ,nPlaces    = nPlaces
     ,tag        = 
       String.concatWith "_" 
@@ -265,11 +269,11 @@ structure Tasks2 = struct
     fun op * (x:int,y:real):int =
       Int.max(Real.round (Real.* (Real.fromInt x,y)),1)
   in
-    #[{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s}
-     ,{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s}
-     ,{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s}
-     ,{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s}
-     ,{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s}
+    #[{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s, hosp=0}
+     ,{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s, hosp=0}
+     ,{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s, hosp=0}
+     ,{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s, hosp=0}
+     ,{sch = 10*s, corp =20*s, cram = 1*s, super = 10*s, park = 2*s, hosp=0}
      ]
   end
 
@@ -284,11 +288,13 @@ structure Tasks2 = struct
     ,betaNCorp  = corp   * Type.gamma
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
+    ,betaNHosp  = 0.0
     ,infectRule = List.nth(Tasks1.infRules1, 0)
     ,intervRule = nil
     ,vacEff     = 0.0
     ,vacTrCover = 0.0
     ,vacSchCover= 0.0
+    ,hospPop    = {doc = 0, inpat = 0, outpat = 0}
     ,nPop       = nPop
     ,nPlaces    = genNPlaces (nPlacesScale)
     ,tag        = 
@@ -315,40 +321,40 @@ structure Tasks3 = struct
   fun mult {super, park, home, corp, school, train} (n:real) = 
     {super=super*n, park=park*n, home=home, corp=corp*n, school=school*n, train=train*n}
 
-  val reproNum3 = {super = 0.3, park = 0.5, home = 1.5, corp = 4.0, school = 5.0, train = 6.0}
-  val reproNum4 = {super = 0.3, park = 0.5, home = 1.5, corp = 3.0, school = 4.0, train = 6.0}
-  val reproNum5 = {super = 0.3, park = 0.5, home = 1.2, corp = 1.5, school = 1.8, train = 3.0}
-  val reproNum6 = {super = 0.3, park = 0.5, home = 0.8, corp = 1.5, school = 1.8, train = 10.0}
+  val reproNum3 = {super = 0.3, park = 0.5, home = 1.5, corp = 4.0, school = 5.0, train = 6.0, hosp = 1.2}
+  val reproNum4 = {super = 0.3, park = 0.5, home = 1.5, corp = 3.0, school = 4.0, train = 6.0, hosp = 1.2}
+  val reproNum5 = {super = 0.3, park = 0.5, home = 1.2, corp = 1.5, school = 1.8, train = 3.0, hosp = 1.2}
+  val reproNum6 = {super = 0.3, park = 0.5, home = 0.8, corp = 1.5, school = 1.8, train = 10.0, hosp = 1.2}
   val nPlaces1 = 
-    #[{sch = 70, corp = 1, cram = 0, super = 10, park = 2}
-     ,{sch = 20, corp = 1, cram = 1, super = 10, park = 2}
-     ,{sch = 12, corp = 1, cram = 0, super = 10, park = 2}
-     ,{sch = 29, corp =20, cram = 1, super = 10, park = 2}
-     ,{sch =  8, corp =20, cram = 0, super = 10, park = 2}
+    #[{sch = 70, corp = 1, cram = 0, super = 10, park = 2, nHosp=0}
+     ,{sch = 20, corp = 1, cram = 1, super = 10, park = 2, nHosp=0}
+     ,{sch = 12, corp = 1, cram = 0, super = 10, park = 2, nHosp=0}
+     ,{sch = 29, corp =20, cram = 1, super = 10, park = 2, nHosp=0}
+     ,{sch =  8, corp =20, cram = 0, super = 10, park = 2, nHosp=0}
      ]
 
   val nPlaces2 = 
-    #[{sch = 28, corp = 1, cram = 0, super = 10, park = 2}
-     ,{sch = 28, corp = 1, cram = 1, super = 10, park = 2}
-     ,{sch = 28, corp = 1, cram = 0, super = 10, park = 2}
-     ,{sch = 28, corp =20, cram = 1, super = 10, park = 2}
-     ,{sch = 28, corp =20, cram = 0, super = 10, park = 2}
+    #[{sch = 28, corp = 1, cram = 0, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp = 1, cram = 1, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp = 1, cram = 0, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp =20, cram = 1, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp =20, cram = 0, super = 10, park = 2, nHosp=0}
      ]
 
   val nPlaces3 = 
-    #[{sch = 28, corp = 1000, cram = 0, super = 10, park = 2}
-     ,{sch = 28, corp = 1000, cram = 1, super = 10, park = 2}
-     ,{sch = 28, corp = 1000, cram = 0, super = 10, park = 2}
-     ,{sch = 28, corp =20000, cram = 1, super = 10, park = 2}
-     ,{sch = 28, corp =20000, cram = 0, super = 10, park = 2}
+    #[{sch = 28, corp = 1000, cram = 0, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp = 1000, cram = 1, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp = 1000, cram = 0, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp =20000, cram = 1, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp =20000, cram = 0, super = 10, park = 2, nHosp=0}
      ]
 
   val nPlaces4 = 
-    #[{sch = 28, corp =  100, cram = 0, super = 10, park = 2}
-     ,{sch = 28, corp =  100, cram = 1, super = 10, park = 2}
-     ,{sch = 28, corp =  100, cram = 0, super = 10, park = 2}
-     ,{sch = 28, corp = 2000, cram = 1, super = 10, park = 2}
-     ,{sch = 28, corp = 2000, cram = 0, super = 10, park = 2}
+    #[{sch = 28, corp =  100, cram = 0, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp =  100, cram = 1, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp =  100, cram = 0, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp = 2000, cram = 1, super = 10, park = 2, nHosp=0}
+     ,{sch = 28, corp = 2000, cram = 0, super = 10, park = 2, nHosp=0}
      ]
 
   val dummyINF = 
@@ -395,8 +401,9 @@ structure Tasks3 = struct
         ,tag = "VAC5000TAC"
         }
 
+  val hospPop = {doc = 10, inpat = 30, outpat = 70}
   fun genConf
-    {rr = {super, park, home, corp, school, train}
+    {rr = {super, park, home, corp, school, train, hosp}
     ,nPlaces
     }
   = {betaNSuper = super  * Type.gamma
@@ -405,16 +412,18 @@ structure Tasks3 = struct
     ,betaNCorp  = corp   * Type.gamma
     ,betaNSch   = school * Type.gamma
     ,betaNTrain = train  * Type.gamma
+    ,betaNHosp  = hosp   * Type.gamma
     ,infectRule = dummyINF (* ÇµÇŒÇÁÇ≠ÇµÇΩÇÁîpé~Ç∑ÇÈ *)
     ,intervRule = [infEMP, infSCH, vacTAC]
     ,vacEff     = 0.0
     ,vacTrCover = 0.0
     ,vacSchCover= 0.0
+    ,hospPop    = hospPop
     ,nPop       = nPop
     ,nPlaces    = nPlaces
     ,tag        = 
       String.concatWith "_" 
-        ( map Real.toString [super,park,home,corp,school,train]
+        ( map Real.toString [super,park,home,corp,school,hosp,train]
         @ [#tag (List.nth(Tasks1.infRules1, 0))]  (* Ç±Ç±èCê≥ïKóv *)
         @ Misc.listV (Vector.map Alice.sI (nPop))
         )
