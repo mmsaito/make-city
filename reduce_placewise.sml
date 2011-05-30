@@ -4,8 +4,8 @@ structure ReducePlacewise = struct
   val $ = Vector.sub; infix 9 $;
   val file1 = "poppw_sample.csv"
   val file2 = "poppw_0.6_1.0_1.2_3.0_3.6_6.0_EMP_30_JOJ_SJK_571641_176866_138684_314861_44680.csv"
-  type nVis = {s:int, e:int , i:int, r:int, d:int, t:int}
-  val nVis0 = {s = 0, e = 0, i = 0, r = 0, t = 0, d = 0}
+  type nVis = {s:int, e:int , i:int, r:int, t:int}
+  val nVis0 = {s = 0, e = 0, i = 0, r = 0, t = 0}
   type place_t = {peak:nVis ref, seq:nVis list ref}
   fun readCsvLine os = Option.map (CSV.split {seps=",",spcs=" \n"}) (T.inputLine os)
     : string list option
