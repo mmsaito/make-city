@@ -4,8 +4,8 @@ structure ReducePlacewise = struct
   val $ = Vector.sub; infix 9 $;
   val file1 = "poppw_sample.csv"
   val file2 = "poppw_0.6_1.0_1.2_3.0_3.6_6.0_EMP_30_JOJ_SJK_571641_176866_138684_314861_44680.csv"
-  type nVis = {s:int, e:int , i:int, r:int, t:int}
-  val nVis0 = {s = 0, e = 0, i = 0, r = 0, t = 0}
+  type nVis = {s:int, e:int , i:int, r:int, d:int, t:int}
+  val nVis0 = {s = 0, e = 0, i = 0, r = 0, t = 0, d = 0}
   type place_t = {peak:nVis ref, seq:nVis list ref}
   fun readCsvLine os = Option.map (CSV.split {seps=",",spcs=" \n"}) (T.inputLine os)
     : string list option
@@ -15,11 +15,12 @@ structure ReducePlacewise = struct
   val idxHome  = 3
   val idxSuper = 4
   val idxPark  = 5
-  val idxTrain = 6
+  val idxHosp  = 6
+  val idxTrain = 7
   fun readH is = let
     val _ = T.inputLine is
     val nAreas = iS (hd (valOf (readCsvLine is)))
-    val nKinds = 7
+    val nKinds = 8
     fun readArea i = let
       val sizes = Array.array (nKinds, 0)
       fun loop () =
@@ -30,6 +31,7 @@ structure ReducePlacewise = struct
            | n :: "nSuper":: _ => (Array.update(sizes, idxSuper, iS n);loop())
            | n :: "nPark" :: _ => (Array.update(sizes, idxPark , iS n);loop())
            | n :: "nHome" :: _ => (Array.update(sizes, idxHome , iS n);loop())
+           | n :: "nHosp" :: _ => (Array.update(sizes, idxHosp , iS n);loop())
            | n :: "nTrain" :: _ => (Array.update(sizes, idxTrain , iS n);loop())
            | "--" :: _     => ()
            | _             => loop()
@@ -53,7 +55,6 @@ structure ReducePlacewise = struct
 
   fun readB {is, size, offset, sizeTable, offsetTable} = let
     (* tokenize‚ÉŽžŠÔ‚ª‚©‚©‚é‚Ì‚ÅŽžŠÔ‚ðŠÔˆø‚­ *)
-    (*
     fun getLine () = 
       (T.inputLine is   (* 180 *)
       ;T.inputLine is   (* 360 *)
@@ -64,8 +65,14 @@ structure ReducePlacewise = struct
       ;T.inputLine is
       ;T.inputLine is
       )
-      *)
-    fun getLine () = readCsvLine is
+
+    fun getLine () = 
+      (T.inputLine is   (* 180 / 720 + 180*)
+      ;T.inputLine is   (* 360 *)
+      ;T.inputLine is   (* 540 *)
+      ;readCsvLine is)  (* 720 = ³Œß / 1440 = ^–é’† *)
+
+    (* fun getLine () = readCsvLine is *)
     fun openL xs = 
       let val s = ref xs in fn () => hd (!s) before s := tl (!s) 
         handle s => (print "some exn\n"; raise s)
@@ -88,7 +95,12 @@ structure ReducePlacewise = struct
         Vector.appi (fn (kind,places) =>
           Vector.app (fn at => 
             let 
-              val point = {t = t, s = getCol(), e = getCol(), i = getCol(), r = getCol ()}
+              val point = {t = t
+                           ,s = getCol()
+                           ,e = getCol()
+                           ,i = getCol()
+                           ,r = getCol()
+                           ,d = getCol()}
             in
               if kind <> idxHome
                 then (#seq  at := point :: !(#seq at)
@@ -104,8 +116,22 @@ structure ReducePlacewise = struct
     ;city)
   end
 
-  val sortPeakTime = Misc.qsortV (fn (x:place_t,y:place_t) => Int.compare((#t o ! o #peak) x, (#t o ! o #peak) y))
+  (* val sortPeakTime = Misc.qsortV (fn (x:place_t,y:place_t) => Int.compare((#t o ! o #peak) x, (#t o ! o #peak) y)) *)
   val sortPeakI    = Misc.qsortV (fn (x:place_t,y:place_t) => Int.compare((#i o ! o #peak) x, (#i o ! o #peak) y))
+
+  fun illRate ({s,e,i,r,d,t}:nVis) = (rI (r + d))/rI (s + e + i + r + d);
+  fun nPerson ({s,e,i,r,d,t}:nVis)    = s + e + i + r;
+
+  fun estN (p:place_t) = foldl Int.max 0 (map nPerson (!(#seq p)));
+  fun finalIllRate (p:place_t) = foldl Real.max 0.0 (map illRate (!(#seq p)));
+
+  fun sumPlace (sel:nVis -> int) (a:place_t, b:int list) = 
+    ListPair.map (fn (x,y) => sel x + y) (!(#seq a), b);
+
+  fun writeL show f v = 
+    (fn os => (app (fn x => T.output (os, show x ^ "\n")) v;T.closeOut os)) (T.openOut f);
+  fun writeV show f v = 
+    (fn os => (Vector.app (fn x => T.output (os, show x ^ "\n")) v;T.closeOut os)) (T.openOut f);
 
   fun writeSeqSEIRV sel os v = 
     Vector.app (fn {seq,peak} => 
@@ -116,9 +142,17 @@ structure ReducePlacewise = struct
   fun writeSeqSEIRVF sel v f =
     (fn os => (writeSeqSEIRV sel os v; TextIO.closeOut os)) (TextIO.openOut f)
 
+  fun writeIllRate f (v: place_t vector) = let
+    val data = Vector.map (fn p => (estN p, finalIllRate p)) v
+  in
+    writeV (fn (x,y) => sI x^","^sR y) f data
+  end
+
+(*
   fun writeSeqReproNumV os (v: place_t vector) kind  = 
     Vector.app (fn {seq,peak} => 
       (List.app (fn ({s,r,e,i,...}: nVis) => T.output (os, sR (rI s/ rI(s+e+i+r)) ^ ",")) (!seq)
       ;T.output(os,"\n"))
     ) v
+    *)
 end 
