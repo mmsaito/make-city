@@ -29,7 +29,6 @@ structure JCL1 = struct
 
     (* シミュレーション中はMonte Carlo実験毎に違う乱数列を使う *)
     val _ = Trivial.inirnd (Alice.iS (#mcid conf))
-    (* val city = Trivial.infectVac conf city *)
     val interv = Trivial.mkIntervPlan conf city
 
     val _ = appIf saveCity (Probe.writeCity city) (!outbase^"/"^tagbase^"/model.city")

@@ -487,23 +487,13 @@ structure Frame = struct
     (#1 area, map setExposedIf (#2 area),#3 area): area
   end
 
-  (* ワクチンの効果 ***********************************************)
-  (*  -- モデルファイルに書くべき *)
-  (* ワクチン奏功率 *)
-  fun vacResponse age =
-    if      0.0 <= age andalso age < 5.0  then 0.6
-    else if 5.0 <= age andalso age < 65.0 then 0.8
-    else                                       0.5
-  (* ワクチンによる減感作率 ------- これはダミー *)
-  fun vacHyposensitize age =
-    if      0.0 <= age andalso age < 5.0  then 0.8
-    else if 5.0 <= age andalso age < 65.0 then 0.4
-    else                                       0.8
-
-  (****************************************************************)
 
   (* 介入を受ける人のリストをつくる *)
-  fun ruleInterv {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} (area:area) = let 
+  fun ruleInterv 
+    {vacResponse: age -> real
+    ,vacHyposensitize: age -> real}
+    {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} (area:area) = let
+
     fun add (id, PERSON p:person) =
       case kind 
         of OPT_INTERV_INF => INTERV_INF {time=time, area_t = idArea area, person = id}

@@ -59,6 +59,8 @@ structure GenTask = struct
   ,vacSchCover= #vacSchCover x
   ,hospPop    = #hospPop x
   ,mcid       = Int.toString mcid
+  ,vacResponse = NONE
+  ,vacHyposensitize = NONE
   }: Trivial.conf
 
   fun dup' (n, conf:Trivial.conf) = List.tabulate(n, setMcid conf)
@@ -134,6 +136,8 @@ structure Tasks1 = struct
     ,vacEff     = vacEff
     ,vacTrCover = vacTrCover
     ,vacSchCover= vacSchCover
+    ,vacResponse = NONE
+    ,vacHyposensitize = NONE
     ,nPop       = rep(5, 3000)
     ,hospPop    = {doc = 0, inpat = 0, outpat = 0}
     ,nPlaces    = nPlaces
@@ -291,6 +295,8 @@ structure Tasks2 = struct
     ,betaNHosp  = 0.0
     ,infectRule = List.nth(Tasks1.infRules1, 0)
     ,intervRule = nil
+    ,vacResponse = NONE
+    ,vacHyposensitize = NONE
     ,vacEff     = 0.0
     ,vacTrCover = 0.0
     ,vacSchCover= 0.0
@@ -418,6 +424,8 @@ structure Tasks3 = struct
     ,vacEff     = 0.0
     ,vacTrCover = 0.0
     ,vacSchCover= 0.0
+    ,vacResponse = NONE
+    ,vacHyposensitize = NONE
     ,hospPop    = hospPop
     ,nPop       = nPop
     ,nPlaces    = nPlaces

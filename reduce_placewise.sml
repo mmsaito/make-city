@@ -72,7 +72,7 @@ structure ReducePlacewise = struct
       ;T.inputLine is   (* 540 *)
       ;readCsvLine is)  (* 720 = ³Œß / 1440 = ^–é’† *)
 
-    (* fun getLine () = readCsvLine is *)
+    fun getLine () = readCsvLine is
     fun openL xs = 
       let val s = ref xs in fn () => hd (!s) before s := tl (!s) 
         handle s => (print "some exn\n"; raise s)
@@ -116,6 +116,8 @@ structure ReducePlacewise = struct
     ;city)
   end
 
+  fun nTimePoints (b: place_t) = length (!(#seq b))
+
   (* val sortPeakTime = Misc.qsortV (fn (x:place_t,y:place_t) => Int.compare((#t o ! o #peak) x, (#t o ! o #peak) y)) *)
   val sortPeakI    = Misc.qsortV (fn (x:place_t,y:place_t) => Int.compare((#i o ! o #peak) x, (#i o ! o #peak) y))
 
@@ -127,6 +129,32 @@ structure ReducePlacewise = struct
 
   fun sumPlace (sel:nVis -> int) (a:place_t, b:int list) = 
     ListPair.map (fn (x,y) => sel x + y) (!(#seq a), b);
+
+  fun sumPlace2 (a:place_t, b:place_t): place_t = let
+    fun sum (a:nVis,b:nVis) =
+      {s = #s a + #s b 
+      ,e = #e a + #e b
+      ,i = #i a + #i b
+      ,r = #r a + #r b
+      ,d = #d a + #d b
+      ,t = #t a
+      }
+    val seq_a = (! o #seq) a
+    val seq_b = (! o #seq) b
+  in
+    {peak = #peak a
+    ,seq  = ref (ListPair.map sum (seq_a,seq_b))
+    }
+  end
+
+  fun sumPlaces (ps:place_t vector): place_t = 
+    case ps
+      of #[] => {peak = ref {s=0,e=0,i=0,r=0,d=0,t=0}
+                ,seq = ref []} : place_t
+       | _   => Misc.foldl1V sumPlace2 ps
+
+  fun sumKindwise (city: place_t vector vector vector) = 
+    Vector.map (Vector.map sumPlaces) city 
 
   fun writeL show f v = 
     (fn os => (app (fn x => T.output (os, show x ^ "\n")) v;T.closeOut os)) (T.openOut f);

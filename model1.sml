@@ -30,6 +30,8 @@ structure Trivial = struct
     ,betaNHosp  : real
     ,infectRule : {tag:string, n:int, rule:belongSpec, isRandom:bool}
     ,intervRule : {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} list
+    ,vacResponse: (age -> real) option
+    ,vacHyposensitize: (age -> real) option
     ,nPlaces    : {cram:int, sch:int, corp:int, park:int, super:int, hosp:int} vector
     ,nPop       : int vector (* ひとつの街の人口。後で配列にする *)
     ,vacEff     : real (* ワクチン効果 *)
@@ -499,13 +501,30 @@ structure Trivial = struct
       ,time  = 0
       }
 
+  (* ワクチンの効果 [デフォルト] ************************************)
+  (* ワクチン奏功率 *)
+  fun vacResponse age =
+    if      0.0 <= age andalso age < 5.0  then 0.6
+    else if 5.0 <= age andalso age < 65.0 then 0.8
+    else                                       0.5
+  (* ワクチンによる減感作率 ------- これはダミー *)
+  fun vacHyposensitize age = 
+    if      0.0 <= age andalso age < 5.0  then 0.8
+    else if 5.0 <= age andalso age < 65.0 then 0.4
+    else                                       0.8
+  (****************************************************************)
+
   (* ルールに従って、いろんな介入計画表をつくる *)
   fun mkIntervPlan (conf:conf) (city:city) = let
     val rnd = getrnd()
+    val vacEff = 
+      {vacResponse      = getOpt (#vacResponse conf, vacResponse)
+      ,vacHyposensitize = getOpt (#vacHyposensitize conf, vacHyposensitize)
+      }
     fun interv intervRule (area:area) = let
     in
       case #isRandom intervRule
-        of false => F.ruleInterv intervRule area
+        of false => F.ruleInterv vacEff intervRule area
          | true  => (print "Random selection is not implemented!\n"; raise Undef)
     end
     and interv' (area:area) = 
