@@ -343,6 +343,7 @@ structure Trivial = struct
   (* ====================================================================  *)
   (* è„ãLÉãÅ[ÉãÇ…ÇÊÇÈìsésÇÃëgÇ›óßÇƒ *)
   fun perHome (conf:conf) at = let
+    val _ = print "*";
     val betaN = fn () => abs (#betaNHome conf*(1.0 + 0.1*rgauss (getrnd())))
   in
     F.makeHome at betaN (F.makePerson (#nPop conf $ at) rulePerson) ruleHome
@@ -370,7 +371,7 @@ structure Trivial = struct
 
   fun train (conf:conf) = F.makeTrains 
     {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
-
+(*
   fun infectVac (conf:conf) (city:city) = let
     val () = F.setVacEff (#vacEff conf)
     val rnd = getrnd()
@@ -409,7 +410,7 @@ structure Trivial = struct
     ,time  = #time city
     }
   end
-
+*)
   (* ïaâ@ÇÃç\ê¨ *)
   fun mkHospital {inpat:int, doc:int, outpat:int} nHosp beta (area:area) = let
     fun loop (0, pop, popCooked, hosps) 

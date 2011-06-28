@@ -211,7 +211,7 @@ structure Type = struct
   (* 介入対象クエリー *)
   datatype roleOpt   = ROL_ARBIT | ROL_SOME of role
   datatype liveinOpt = LIV_ARBIT | LIV_SOME of area_t  (* for livein *)
-  datatype workatOpt = WOR_ARBIT | WOR_LOCAL | WOR_SOME of (area_t * place_k) list
+  datatype workatOpt = WOR_ARBIT | WOR_LOCAL | WOR_OUTSIDE | WOR_SOME of (area_t * place_k) list
   type belongSpec = {role: roleOpt, livein: liveinOpt, workat: workatOpt}
   datatype intervOpt = OPT_INTERV_INF | OPT_INTERV_VAC
 
@@ -382,13 +382,14 @@ structure Frame = struct
   fun matchBelongSpec ({role, livein, workat}: belongSpec) (PERSON p) = let
     val isHome = fn ({place_k = Home, ...}:place_t) => true | _ => false
     val hometown = #area_t (valOf (List.find isHome (#belong p)))
-      handle _ => (print "warning: homeless agent. forcing their hometown to be 0-th one.\n"
-                  ;0)
+      handle _ => (print "warning: homeless agent. regard current visiting point as home.\n"
+                  ;#area_t (#visit p))
     fun eqRole (ROL_ARBIT, _) = true
       | eqRole (ROL_SOME x, y) = x = y
     fun eqLive (LIV_ARBIT, _) = true
       | eqLive (LIV_SOME x, y) = x = y
     fun eqWork (WOR_LOCAL , ys) = List.all (fn ({area_t,...}:place_t) => area_t = hometown) ys
+      | eqWork (WOR_OUTSIDE,ys) = List.exists (fn ({area_t,...}:place_t) => area_t <> hometown) ys
       | eqWork (WOR_ARBIT , _ ) = true
       | eqWork (WOR_SOME xs,ys) = (* ToDo: 一般の集合演算が書けないといけない *)
       List.all (fn (area_t':area_t,place_k':place_k) => 

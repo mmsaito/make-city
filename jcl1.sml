@@ -24,7 +24,7 @@ structure JCL1 = struct
     val _ = appIf mpi MPI.barrier MPI.COMM_WORLD
 
     (* まちを構成するまでは共通の乱数列を使う *)
-    val _ = Trivial.inirnd 0
+    val _ = Trivial.inirnd 0;
     val city = Trivial.city conf
 
     (* シミュレーション中はMonte Carlo実験毎に違う乱数列を使う *)
