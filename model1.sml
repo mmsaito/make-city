@@ -343,7 +343,6 @@ structure Trivial = struct
   (* ====================================================================  *)
   (* ã‹Lƒ‹[ƒ‹‚É‚æ‚é“sŽs‚Ì‘g‚Ý—§‚Ä *)
   fun perHome (conf:conf) at = let
-    val _ = print "*";
     val betaN = fn () => abs (#betaNHome conf*(1.0 + 0.1*rgauss (getrnd())))
   in
     F.makeHome at betaN (F.makePerson (#nPop conf $ at) rulePerson) ruleHome
