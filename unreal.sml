@@ -209,7 +209,7 @@ structure Type = struct
   end
 
   (* 介入対象クエリー *)
-  datatype roleOpt   = ROL_ARBIT | ROL_SOME of role
+  datatype roleOpt   = ROL_ARBIT | ROL_SOME of role | ROL_Q of (role -> bool)
   datatype liveinOpt = LIV_ARBIT | LIV_SOME of area_t  (* for livein *)
   datatype workatOpt = WOR_ARBIT | WOR_LOCAL | WOR_OUTSIDE | WOR_SOME of (area_t * place_k) list
   type belongSpec = {role: roleOpt, livein: liveinOpt, workat: workatOpt}
@@ -218,9 +218,14 @@ structure Type = struct
   (* 介入計画リスト *)
   datatype interv 
     = INTERV_INF of {time:int, area_t:int, person: int}
-    | INTERV_VAC of {time:int, area_t:int, person: int
+    | INTERV_VAC of {time:int 
+                    ,area_t:int, person: int
                     ,response: real
                     ,hyposensitize: real}
+    (* 準備するワクチンの総量を指定する:
+     * シミュレーション中にワクチン接種者がこの指定値を越えた場合には、介入計画に
+     * 書かれたワクチン接種対象者は無視される *)
+    | INTERV_LIMIT_VAC of int
 end
 
 structure Frame = struct
@@ -386,6 +391,7 @@ structure Frame = struct
                   ;#area_t (#visit p))
     fun eqRole (ROL_ARBIT, _) = true
       | eqRole (ROL_SOME x, y) = x = y
+      | eqRole (ROL_Q q, y) = q y
     fun eqLive (LIV_ARBIT, _) = true
       | eqLive (LIV_SOME x, y) = x = y
     fun eqWork (WOR_LOCAL , ys) = List.all (fn ({area_t,...}:place_t) => area_t = hometown) ys
@@ -490,28 +496,44 @@ structure Frame = struct
 
 
   (* 介入を受ける人のリストをつくる *)
+  (* area でなく、area vectorを受けるとるように書く *)
   fun ruleInterv 
     {vacResponse: age -> real
     ,vacHyposensitize: age -> real}
-    {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} (area:area) = let
-
-    fun add (id, PERSON p:person) =
+    {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} 
+    (city:city) = 
+  let
+    fun add (area_id, per_id, PERSON p:person) =
       case kind 
-        of OPT_INTERV_INF => INTERV_INF {time=time, area_t = idArea area, person = id}
+        of OPT_INTERV_INF => INTERV_INF {time=time, area_t = area_id, person = per_id}
          | OPT_INTERV_VAC => 
              INTERV_VAC {time          = time
-                        ,area_t        = idArea area
-                        ,person        = id
+                        ,area_t        = area_id
+                        ,person        = per_id
                         ,response      = vacResponse (#age p)
                         ,hyposensitize = vacHyposensitize (#age p)
                         }
     val n' = ref n
-    fun matchAdd (id, p, xs:interv list) = 
-      if (!n' > 0 andalso matchBelongSpec rule p) 
-        then add (id,p) :: xs  before n' := !n' - 1
+    val ptr_pops = Vector.map (ref o popArea) (#area city)
+
+    fun loop (xs: interv list, per_id:int) = let
+      val xs =
+        Vector.foldli (fn (i,area,xs) => 
+          case !(ptr_pops $ i) 
+            of p::pop =>
+              (ptr_pops $ i := pop
+              ;if (!n' > 0 andalso matchBelongSpec rule p) 
+                 then add (idArea area, per_id, p) :: xs before n' := !n' - 1
+                 else xs)
+           | _ => xs
+        ) xs (#area city)
+    in
+      if Vector.exists (not o null o !) ptr_pops 
+        then loop (xs, per_id + 1)
         else xs
+    end
   in
-    Misc.foldliL matchAdd nil (popArea area)
+    rev (loop (nil, 0))
   end
 
   (* 8. ワクチン接種 *)
@@ -968,10 +990,11 @@ structure Probe = struct
     fun wrt (INTERV_VAC {time:int, area_t: int, person: int, response: real, hyposensitize: real}) =
       T.output(os, "VAC"^","^sI time^","^sI area_t^","^sI person
                  ^","^sR response^","^sR hyposensitize^"\n")
+      | wrt (INTERV_LIMIT_VAC nVac) = 
+      T.output(os, "LIMIT_VAC"^","^sI nVac^"\n")
       | wrt (INTERV_INF {time:int, area_t: int, person: int}) =
       T.output(os, "INF"^","^sI time^","^sI area_t^","^sI person^"\n")
   in
     (T.output(os, sI(length xs)^"\n"); app wrt xs; T.closeOut os)
   end
-
 end

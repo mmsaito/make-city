@@ -50,6 +50,15 @@ structure JCL1 = struct
     Probe.writeIntervPlan interv (!outbase^"/"^(#tag conf)^"/"^subtag^"/interv.csv")
   end
 
+  val makeInterv = Trivial.mkIntervPlan
+
+  fun writeInterv (conf:Trivial.conf) interv subtag = let
+    open Alice
+    val () = X_Misc.mkDir (!outbase^"/"^(#tag conf)^"/"^subtag)
+  in
+    Probe.writeIntervPlan interv (!outbase^"/"^(#tag conf)^"/"^subtag^"/interv.csv")
+  end
+
   fun main offset = let
     val t0    = Time.now();
     val _     = MPI.init();

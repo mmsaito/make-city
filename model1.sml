@@ -521,16 +521,12 @@ structure Trivial = struct
       {vacResponse      = getOpt (#vacResponse conf, vacResponse)
       ,vacHyposensitize = getOpt (#vacHyposensitize conf, vacHyposensitize)
       }
-    fun interv intervRule (area:area) = let
-    in
+    fun interv intervRule = 
       case #isRandom intervRule
-        of false => F.ruleInterv vacEff intervRule area
+        of false => F.ruleInterv vacEff intervRule city
          | true  => (print "Random selection is not implemented!\n"; raise Undef)
-    end
-    and interv' (area:area) = 
-      List.concat (map (fn rule => interv rule area) (#intervRule conf))
   in
-    Vector.foldl (fn (a,xs) => interv' a @ xs) nil (#area city)
+    List.concat (map interv (#intervRule conf))
   end
 
 
