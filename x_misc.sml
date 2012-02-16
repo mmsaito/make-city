@@ -127,6 +127,7 @@ in
     Iterator.applyN (fn (xs,ys) => (fn (z,zs) => (z::xs,zs)) 
       (popAt(ys, Random.randInt rnd mod (length ys)))) n (nil,seq)
 
+  (* ディレクリ区切りを含むパスを受けとり、中間パスが存在しなければ、これもつくる *)
   fun mkDir path = let
     val org = OS.FileSys.getDir()
     val arcs = CSV.split {spcs="/\\", seps=""} path
@@ -135,6 +136,16 @@ in
       | dig nil = ()
   in
     (dig arcs; OS.FileSys.chDir org)
+  end
+
+  (* ディレクリ区切りを含むパスを受けとり、中間パスが存在しなければ
+   * これを作ったうえで、指定パスを新規ファイルとして作成する *)
+  fun openOutDig path = let
+    open OS.Path
+    val cleanup = mkCanonical o fromUnixPath o toUnixPath
+    val path = cleanup path
+  in
+    (mkDir (dir path); TextIO.openOut path)
   end
 
   fun readF s = let

@@ -147,6 +147,7 @@ structure Type = struct
       , park : place vector
       , super: place vector
       }
+
  (* ToDo: どこかで #id area = index of vector を保証しないといけない *)
   type area = id * person list * places
     (* タプルではなく、レコードにすべきだった *)
@@ -902,7 +903,8 @@ structure Probe = struct
    *   - 初期条件を書き出すことしか想定していないので、完全でないかも
    *     しれない。*)
   fun writeCity (city:city) (f:string) = let
-    val os = TextIO.openOut f
+    (* val os = TextIO.openOut f *)
+    val os = X_Misc.openOutDig f
     fun w s = TextIO.output(os, s)
     fun w' s = (w s; w "\n")
     fun w_ s = (w s; w ",")
@@ -976,7 +978,8 @@ structure Probe = struct
   end
 
   fun writeIntervPlan (xs: interv list) f = let
-    val os = T.openOut f
+    (* val os = T.openOut f *)
+    val os = X_Misc.openOutDig f
     fun wrt (INTERV_VAC {time:int, area_t: int, person: int, response: real, hyposensitize: real}) =
       T.output(os, "VAC"^","^sI time^","^sI area_t^","^sI person
                  ^","^sR response^","^sR hyposensitize^"\n")
@@ -987,4 +990,17 @@ structure Probe = struct
   in
     (T.output(os, sI(length xs)^"\n"); app wrt xs; T.closeOut os)
   end
+
+  (* カテゴリ毎の人数の数え上げ *)
+  fun nRolePop (city:city) cond = Vector.map (length o List.filter cond o Type.popArea) (#area city);
+  fun nStu city = nRolePop city (fn PERSON {role=Student,...} => true | _ => false);
+  fun nEmp city = nRolePop city (fn PERSON {role=Employed,...} => true | _ => false);
+  fun hasMultipleAreas (vs: Type.place_t list) =
+    case vs 
+      of {area_t=a1,...}::vs =>
+           List.exists (fn {area_t=a2,...} => a1 <> a2) vs
+       | _ => false
+  fun nTrUser city = nRolePop city (fn PERSON {belong,...} => hasMultipleAreas belong)
+  fun nTrStu  city = nRolePop city (fn PERSON {role=Student, belong,...} => hasMultipleAreas belong | _ => false)
+  fun nTrEmp  city = nRolePop city (fn PERSON {role=Employed, belong,...} => hasMultipleAreas belong | _ => false)
 end

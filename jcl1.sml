@@ -1,7 +1,3 @@
-(* 配布用の作り方としては、jcl1.smlとtempMain,Vac.smlを合体して、みちかい
-* サンプルすくりぷとをつくればよいのではないかと。
-*
-*)
 structure JCL1 = struct
   structure M = MPI.Marshall;
   structure U = MPI.Unmarshall;

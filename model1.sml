@@ -28,7 +28,8 @@ structure Trivial = struct
     ,betaNPark  : real
     ,betaNTrain : real
     ,betaNHosp  : real
-    ,infectRule : {tag:string, n:int, rule:belongSpec, isRandom:bool}
+    (* ,infectRule : {tag:string, n:int, rule:belongSpec, isRandom:bool} *)
+    ,infectRule : unit
     ,intervRule : {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} list
     ,vacResponse: (age -> real) option
     ,vacHyposensitize: (age -> real) option
@@ -370,46 +371,7 @@ structure Trivial = struct
 
   fun train (conf:conf) = F.makeTrains 
     {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
-(*
-  fun infectVac (conf:conf) (city:city) = let
-    val () = F.setVacEff (#vacEff conf)
-    val rnd = getrnd()
-    val vac: area -> area =
-      F.vacWho (fn p => F.ruleVacTrain  {cover = #vacTrCover  conf, eff = #vacEff conf} p orelse 
-                        F.ruleVacSchool {cover = #vacSchCover conf, eff = #vacEff conf} p)
 
-    (* 注意: ここの抽出方法の違い(決定的/ランダム)の対応は、非常に場当たり的なものである *)
-    fun infect infectRule (area:area) = let
-      val nInf = #n infectRule
-      val rule = #rule infectRule
-      val () = print (Bool.toString (#isRandom (#infectRule conf)))
-    in
-      case #isRandom infectRule
-        of false => F.ruleInfect nInf rule area
-         | true  =>
-            (case #livein rule
-               of LIV_SOME area_t =>
-                 if area_t = idArea area 
-                   then F.distInfect rnd [(nInf,INF 0)] area
-                   else area
-                | LIV_ARBIT =>
-                   F.distInfect rnd [(nInf div 5, INF 0)] area
-                   (* マジックナンバー 5 = 都市数 *)
-            )
-    end
-    and infect' (area:area) = 
-      case Unsafe.Object.rep (Unsafe.Object.toObject (#infectRule conf))
-        of Unsafe.Object.Pair =>
-           foldl (fn (infectRule,area) => infect infectRule area) 
-             area (Unsafe.cast (#infectRule conf))
-         | _      => infect (#infectRule conf) area
-  in
-    {area  = Vector.map (infect' o vac) (#area city)
-    ,train = #train city
-    ,time  = #time city
-    }
-  end
-*)
   (* 病院の構成 *)
   fun mkHospital {inpat:int, doc:int, outpat:int} nHosp beta (area:area) = let
     fun loop (0, pop, popCooked, hosps) 
@@ -583,7 +545,6 @@ structure Trivial = struct
       String.implode (Misc.qsortL symOrd seq)
     end
 
-
   (* トップレベル関数 *)
   fun run1 {conf:conf, recstep, tStop, dir, tag, city, seq} = let
     val () = writeConf conf (dir^"/conf_"^ tag^".csv")
@@ -637,4 +598,7 @@ structure Trivial = struct
     Iterator.applyN step nstep (city conf)
       before T.closeOut os
   end
+
+  (****************************************************************)
+  (* スクリプトや対話環境で使うヘルパカンスウ *)
 end
