@@ -1,3 +1,7 @@
+(* 配布用の作り方としては、jcl1.smlとtempMain,Vac.smlを合体して、みちかい
+* サンプルすくりぷとをつくればよいのではないかと。
+*
+*)
 structure JCL1 = struct
   structure M = MPI.Marshall;
   structure U = MPI.Unmarshall;
@@ -85,10 +89,3 @@ structure JCL1 = struct
     OS.Process.success
   end 
 end
-
-(* 以下は、後で使うかもなコード断片 *)
-(*
-  fun take (xs, n) = List.take(xs, Int.min(n,length(xs)))
-  fun echoOff () = Control.Print.out := {flush = fn _ => (), say = fn _ => ()} ;
-  fun echoOn () = Control.Print.out := {flush = Control.Print.flush, say = Control.Print.say} ;
-*)
