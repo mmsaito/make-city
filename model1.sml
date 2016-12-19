@@ -8,6 +8,7 @@ structure Trivial = struct
   structure F = Frame;
   structure T = TextIO
   structure It = Iterator
+  structure V = Vector
   open X_Misc;
   open Alice; infix 9 *^;
   open EasyPrint;
@@ -284,8 +285,12 @@ structure Trivial = struct
     fun crams() = List.filter (fn x => Vector.length x > 0) 
                    (Misc.listV (Vector.map (#cram o #3) areas))
     val selCram = rndSelLP rnd
-      [(0.4, fn () => SOME (rndSelV rnd (rndSelL rnd (crams()))))
-      ,(0.6, fn () => NONE)]
+          [(0.4, fn () => 
+                   case crams()
+                     of nil => NONE
+                      | xs  => SOME (rndSelV rnd (rndSelL rnd xs))
+           )
+          ,(0.6, fn () => NONE)]
 
     fun selSch () = let
       val a = rndSelLP rnd [(0.8,a0), (0.2, a')]  (* 8割は地元へ、残り2割りは学区外へ *)
@@ -361,19 +366,29 @@ structure Trivial = struct
         ]
   end
 
-  fun area (conf:conf) = 
+  fun area (conf:conf) = let
+    val true = V.length (#nPop conf) = V.length (#nPlaces conf)
+    val idxTowns = V.tabulate(V.length (#nPop conf), fn i => i)
+    (* val idxTowns = #[HAC, TAC, JOJ, SJK, TKY] *)
+  in
     Vector.map 
       (fn at => 
         (fn (per,home) =>
           (at, per, place conf at home)
         ) (perHome conf at)
-      ) #[HAC, TAC, JOJ, SJK, TKY]
+      ) idxTowns 
+  end
 
   fun train (conf:conf) = F.makeTrains 
     {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
 
   (* 病院の構成 *)
   fun mkHospital {inpat:int, doc:int, outpat:int} nHosp beta (area:area) = let
+    (* バグへの対処: List.takeを使うと、足りないときに例外が発生する。 *)
+    fun takeL (xs, n) = List.take (xs, n) handle Subscript => xs 
+      before print ("WARNING: mkHospital required "  ^ sI n 
+                   ^" items, but has only " ^ sI (length xs) ^ " items\n")
+    fun dropL (xs, n) = List.drop (xs, n) handle Subscript => nil
     fun loop (0, pop, popCooked, hosps) 
       = ( idArea area
         , List.concat (pop::rev popCooked)
@@ -389,9 +404,9 @@ structure Trivial = struct
           }
         ): area
       | loop (cnt, pop, popCooked, hosps) = let
-      val pDoc   = List.take (List.drop (pop, inpat), doc)
-      val pOutpat= List.take (List.drop (pop, inpat + doc), outpat)
-      val rest   = List.drop (pop, inpat + doc + outpat)
+      val pDoc   = takeL (dropL (pop, inpat), doc)
+      val pOutpat= takeL (dropL (pop, inpat + doc), outpat)
+      val rest   = dropL (pop, inpat + doc + outpat)
       val hosp_t: place_t =  
         {place_k = Hosp
         ,area_t  = idArea area
@@ -416,8 +431,8 @@ structure Trivial = struct
       , mkSched = fn _ => nil 
       , sched   = nil
       } 
-      val pInpat = map asPatient (List.take (pop, inpat))
-      val pop = List.drop (pop, inpat)
+      val pInpat = map asPatient (takeL (pop, inpat))
+      val pop = dropL (pop, inpat)
      
       fun asDoctor (PERSON p) = PERSON 
       { age    = #age p
@@ -431,8 +446,8 @@ structure Trivial = struct
       , mkSched = #mkSched p 
       , sched   = #sched p
       }
-      val pDoc = map asDoctor (List.take (pop, doc))
-      val pop = List.drop (pop, doc)
+      val pDoc = map asDoctor (takeL (pop, doc))
+      val pop = dropL (pop, doc)
 
       fun asOutpat (PERSON p) = PERSON
       { age    = #age p
@@ -445,23 +460,25 @@ structure Trivial = struct
       , mkSched = #mkSched p 
       , sched   = #sched p
       }
-      val pOutpat = map asOutpat (List.take (pop, outpat))
-      val pop = List.drop (pop, doc)
+      val pOutpat = map asOutpat (takeL (pop, outpat))
+      val pop = dropL (pop, doc)
     in
       loop (cnt - 1, pop, pInpat::pDoc::pOutpat::popCooked, hosp::hosps) 
     end
   in
-    loop (nHosp, popArea area, nil, nil)
+    (print ("mkHospital: loop " ^ sI nHosp ^ "\n")
+    ;loop (nHosp, popArea area, nil, nil))
   end
 
   fun city (conf:conf) = 
     F.evalPlace
       {area  = Vector.mapi (fn (i,area) =>
            mkHospital (#hospPop conf) (#hosp (#nPlaces conf $ i)) (#betaNHosp conf) area
-         ) (F.makeVisit' (area conf) ruleVisit)
-      ,train = train conf
+              handle s => raise s (* ここで、例外 mkHospitalにバグ有 *)
+         ) (F.makeVisit' (area conf  handle s => raise s) ruleVisit) 
+      ,train = train conf handle s => raise s
       ,time  = 0
-      }
+      } handle s => raise s;
 
   (* ワクチンの効果 [デフォルト] ************************************)
   (* ワクチン奏功率 *)

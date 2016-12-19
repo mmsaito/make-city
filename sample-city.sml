@@ -134,8 +134,6 @@ in
   val city = Trivial.city conf0;
   val _    = Probe.writeCity city ("./" ^ #tag conf0 ^ "/model.city");
 
-  (* val city = JCL1.makeWriteCity conf0; *)
-
   fun nRolePop cond = Vector.map (length o List.filter cond o Type.popArea) (#area city);
   val nStu = nRolePop (fn PERSON {role=Student,...} => true | _ => false);
   val nEmp = nRolePop (fn PERSON {role=Employed,...} => true | _ => false);

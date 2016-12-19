@@ -494,6 +494,7 @@ structure Frame = struct
     {tag:string, n:int, rule:belongSpec, isRandom:bool, time:int, kind:intervOpt} 
     (city:city) = 
   let
+    open Alice 
     fun add (area_id, per_id, PERSON p:person) =
       case kind 
         of OPT_INTERV_INF => INTERV_INF {time=time, area_t = area_id, person = per_id}
@@ -505,26 +506,38 @@ structure Frame = struct
                         ,hyposensitize = vacHyposensitize (#age p)
                         }
     val n' = ref n
-    val ptr_pops = Vector.map (ref o popArea) (#area city)
 
-    fun loop (xs: interv list, per_id:int) = let
+    val nPop =  Vector.map (length o popArea) (#area city)
+    val nAll = Vector.foldl (op +) 0 nPop
+    val ws = Vector.map (fn n => rI n / rI nAll) nPop
+
+    val ptr_pops = 
+      Vector.map (fn area => (idArea area, ref 0, ref (popArea area))) (#area city)
+    val ptr_w_pops = 
+      List.tabulate(Vector.length (#area city), fn i => (ws $ i, ptr_pops $ i))
+
+    val rnd = getrnd()
+
+    fun loop (xs: interv list) = let
+      val (id_area,ptr_id_per,ptr_pop) = rndSelLP rnd ptr_w_pops
+      val id_per = !ptr_id_per
+      val () = ptr_id_per := id_per + 1
       val xs =
-        Vector.foldli (fn (i,area,xs) => 
-          case !(ptr_pops $ i) 
+          case !ptr_pop 
             of p::pop =>
-              (ptr_pops $ i := pop
+              (ptr_pop := pop
               ;if (!n' > 0 andalso matchBelongSpec rule p) 
-                 then add (idArea area, per_id, p) :: xs before n' := !n' - 1
-                 else xs)
+                 then add (id_area, id_per, p) :: xs before n' := !n' - 1
+                 else xs
+              )
            | _ => xs
-        ) xs (#area city)
     in
-      if Vector.exists (not o null o !) ptr_pops 
-        then loop (xs, per_id + 1)
+      if !n' > 0 andalso Vector.exists (not o null o ! o #3) ptr_pops
+        then loop xs
         else xs
     end
   in
-    rev (loop (nil, 0))
+    rev (loop nil)
   end
 
   (* 8. ƒƒNƒ`ƒ“Úí *)
