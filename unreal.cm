@@ -1,7 +1,7 @@
 (* ‘Sƒ‰ƒCƒuƒ‰ƒŠ‚Ì“Ç‚İ‚İ (.cm ”Å) *)
 Library
     library ($mylib/import-all.cm)
-    library ($mpi/mpi.cm)
+(*    library ($mpi/mpi.cm) *)
     structure X_Misc
     structure Type
     structure Frame
@@ -19,10 +19,11 @@ is
     $smlnj/cm.cm
     $c/c.cm
     $mylib/import-all.cm
-    $mpi/mpi.cm
+(*    $mpi/mpi.cm *)
     x_misc.sml
     unreal.sml
     model1.sml
-    jcl1.sml
+(*    jcl1.sml  *)  (* with MPI *)
+    jcl1_stand_alone.sml  (* w/o MPI *)
     gentask.sml
     reduce_placewise.sml
