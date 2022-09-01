@@ -62,7 +62,7 @@ structure Type = struct
   (* êlä‘ *)
   type age  = real
   datatype gender  = F | M
-  datatype role    = Employed | Hausfrau | Student | Patient | Doctor
+  datatype role    = Employed | Hausfrau | Student | Patient | Doctor | Visitor
   datatype health
     = SUS         (* ñ∆âuÇ»Çµ *)
     | EXP of time (* éûçè _Ç≈ä¥êıÇµÇΩ *)
@@ -82,6 +82,7 @@ structure Type = struct
     val JOJ = 2:area_t
     val SJK = 3:area_t
     val TKY = 4:area_t
+    val OUT = 5:area_t
 
   datatype place_k = Cram | Sch | Corp | Home | Super | Park | Train | Hosp
 
@@ -242,14 +243,14 @@ structure Frame = struct
         | op <+> (x,(NONE,  v)) = (x, v)
       infix 1 <+>
       fun group1 (ps: per2 list) = 
-        case foldl (fn (cond,(mem,pop)) => mem <+> findpop cond pop) (nil,ps) (rule())
+        case (foldl (fn (cond,(mem,pop)) => mem <+> findpop cond pop handle s => raise s) (nil,ps) (rule()) handle s => raise s)
           of (nil, y::ys) => ([y], ys) (* ÇPêlÇÕéÊÇÍÇÈÇ±Ç∆Çï€èÿ *)
            | (xs , ys)    => (xs , ys)
       fun loop pps nil = pps
         | loop pps (ps:per2 list)  =
         (fn (qs,ps) => loop (qs::pps) ps) (group1 ps)
     in
-      loop nil ps
+      loop nil ps handle s => raise s
     end
     val idx = cnt ()
     fun home (ps:per2 list): (person list) * place = let
@@ -259,7 +260,7 @@ structure Frame = struct
         ,pTrns = zeroPTrns()
         ,size  = length ps
         ,betaN = betaN ()
-        }
+        } handle s => raise s
       val ps: person list = 
         map (fn p => PERSON
           {age    = #age p
@@ -272,9 +273,9 @@ structure Frame = struct
           ,mkSched = #mkSched p
           ,sched  = nil
           }
-        ) ps 
+        ) ps handle s => raise s
     in
-      (ps,hm)
+      (ps,hm) handle s => raise s
     end
     val unzip = (fn (per,pl) => (List.concat per,Vector.fromList pl)) o ListPair.unzip
   in
@@ -296,10 +297,17 @@ structure Frame = struct
       List.concat (map (fn (n,rule) => List.tabulate(n, rule area_t)) rules)
     fun is x (p:place) = #place_k (#id p) = x
     fun filter c = Vector.fromList o (List.filter c)
+
+    fun check xs = let
+      val n = Vector.length xs
+    in
+      (print ("makePlace::len(corp) = "^sI n ^ "\n"); xs)
+    end
+
   in
     {cram  = filter (is Cram ) places
     ,sch   = filter (is Sch  ) places
-    ,corp  = filter (is Corp ) places
+    ,corp  = check (   filter (is Corp ) places )
     ,super = filter (is Super) places
     ,park  = filter (is Park ) places
     ,home  = home
@@ -318,6 +326,7 @@ structure Frame = struct
       ,gender = #gender x
       ,role   = #role x
       ,belong = map clone_place_t (belong area (PERSON x) @ #belong x)
+         handle s => raise s
       ,visit  = #visit x
       ,dest   = #dest x
       ,health = #health x
@@ -359,6 +368,9 @@ structure Frame = struct
   let
     val idx = cnt ()
     val req = genReqtime time2next
+
+    val () = CSV.writeV {conv = sI, data = req, file = "train-req-time.csv", keys = nil};
+
     infix 9 $; val op $ = Vector.sub
   in
     Vector.map (fn {deptime, stations} => 
@@ -893,6 +905,7 @@ structure Probe = struct
     | showRole Student  = "Student" 
     | showRole Patient  = "Patient"
     | showRole Doctor   = "Doctor"
+    | showRole Visitor  = "Visitor"
 
   fun showHealth SUS        = "SUS," ^ "0" (* dummy *)
     | showHealth (EXP time) = "EXP," ^ sI time

@@ -17,7 +17,7 @@ fun paretoSel' {alpha, gamma, n, m, beta} = let
   val P1 = alpha*beta/(beta - 1.0)*(1.0 - (alpha/gamma)*^(beta - 1.0))
   val P2 = P1 + gamma*Q1*m/n
   fun u rnd = P2*Random.randReal rnd
-  fun clip x = Real.round x
+  fun clip x = Real.round x handle s => raise s
 in
   fn rnd => let
     val u = u rnd

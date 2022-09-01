@@ -17,7 +17,7 @@ is
     $/basis.cm
     $/smlnj-lib.cm
     $smlnj/cm.cm
-    $c/c.cm
+(*    $c/c.cm *)
     $mylib/import-all.cm
 (*    $mpi/mpi.cm *)
     x_misc.sml

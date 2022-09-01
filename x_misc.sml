@@ -6,12 +6,30 @@ local
   fun op <> (x,y) = x y; infix 1 <>;
   val op $ = Vector.sub; infix 9 $;
 in
+  fun save (i,x) = let val os = BinIO.openOut (sI i) in (BinIO.output(os,Unsafe.blastWrite x); BinIO.closeOut os) end ;
+  fun load i = let val is = BinIO.openIn (sI i) in Unsafe.blastRead (BinIO.input is before BinIO.closeIn is) end;
+
+  fun splitR x = let val M = 67108864.0 val a = (x + M) - M val b = x - a in (a,b) end ;
+
+  fun joinR (a,b) = let val (a,b) = ((#1 o splitR) a, b) in a + b end;
+
+  fun sRR (a,b) = sR a ^":"^sR b
   (* —” *)
+  val saveCnt = ref 0
+  fun getcnt() = !saveCnt before saveCnt := !saveCnt + 1
   fun rgauss rnd = let
     val u1 = Random.randReal rnd
     val u2 = Random.randReal rnd
+
+    fun chk x = 
+      if Real.isNan x then 
+        (print ("rgauss: "^sRR (splitR u1) ^ " " ^ sRR (splitR u2)^ "\n")
+        ; save (getcnt(), #[x,u1,u2])
+        ; sqrt(~2.0*ln u1)*cos(2.0*pi*u2)
+        )
+      else x
   in
-    sqrt(~2.0*ln u1)*cos(2.0*pi*u2)
+    chk(  sqrt(~2.0*ln u1)*cos(2.0*pi*u2) )
   end
 
   fun irndIn rnd (x,y) = 
@@ -50,7 +68,8 @@ in
     val P1 = alpha*beta/(beta - 1.0)*(1.0 - (alpha/gamma)*^(beta - 1.0))
     val P2 = P1 + gamma*Q1*m/n
     fun u rnd = P2*Random.randReal rnd
-    fun clip x = Real.round x
+    fun clip x = Real.round x  handle s => raise s
+
   in
     fn rnd => let
       val u = u rnd

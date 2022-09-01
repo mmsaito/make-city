@@ -227,7 +227,7 @@ structure Trivial = struct
 
   (* 家族構成ルール *)
   fun ruleHome () =  let val rnd = getrnd() in
-    List.tabulate (1 + iR (abs (2.0 * rgauss rnd)), fn _ => fn _ => true) end
+    List.tabulate (1 + iR (abs (2.0 * rgauss rnd)) handle s => raise s, fn _ => fn _ => true) end
 
   (* 公共空間生成ルール *)
   fun rulePlace' betaN place_t = let
@@ -244,6 +244,8 @@ structure Trivial = struct
   fun rulePlace place_k betaN area_t id = 
     rulePlace' betaN {place_k = place_k, area_t = area_t, id = id, tVis = ref ~1}
 
+  val xx_mask = ref true;
+
   (* 行動範囲ルール *) 
   fun ruleVisit (areas: area vector): person -> place_t list = let
     val rnd = getrnd()
@@ -254,10 +256,23 @@ structure Trivial = struct
     val prCorpArea = Misc.listV 
         (Vector.mapi (fn (i,nC) => (rI nC / rI nSumCorp, #3 (areas $ i))) nCorp)
 
+    val _ = 
+     if !xx_mask then
+       (print "\n\ndebug: prCorpArea = ";
+        app (fn (x,_) => print(sR x^" ")) prCorpArea; print "\n";
+        print "nCorp = ";
+        app (fn (_,pls) => print(sI (V.length(#corp pls))  ^" ")) prCorpArea;
+        print "\n\n")
+     else ()
+
     (* 会社の従業員数の分布がパレート分布になるように構成 *)
     fun selMyCorp () = let
       val corp = #corp (rndSelLP rnd prCorpArea)
       val n    = rI (Vector.length corp)
+
+      val _ = if !xx_mask andalso iR n = 0 then print "debug zero corp chosen!\n" else ()
+      val _ = xx_mask := false
+
       val idxSel = paretoSel {alpha = 1.0, gamma = 100.0, n = n - 1.0, m = 0.0, beta = 2.0}
         handle s => (print "some exception arise!\n"; raise s)
       fun gard i = 
@@ -265,7 +280,7 @@ structure Trivial = struct
         else if i >= iR n then (print ("parato[" ^ sI i ^"] "); 0)
         else i
     in
-      corp $ (gard (idxSel rnd))
+      corp $ (gard (idxSel rnd)) 
     end
 
     (* 外勤先はランダムに選択 *)
@@ -295,26 +310,37 @@ structure Trivial = struct
     fun selSch () = let
       val a = rndSelLP rnd [(0.8,a0), (0.2, a')]  (* 8割は地元へ、残り2割りは学区外へ *)
     in
-      rndSelV rnd (#sch a)
+      rndSelV rnd (#sch a) handle s => raise s
     end
+    (* Note: if there are no super/sch/... then the sampling below CRASHES! *)
   in
     case #role p
       (* 23.2.18 外勤の実験。とりあえず、コード改変でやってみる。*)
       (* of Employed => map #id [selCorp(), rndSelV rnd (#super a0)] *)
-      of Employed => map #id (rndSelV rnd (#super a0) :: selCorp 1)
-       | Student  => map #id (selCram() `:: [selSch (), rndSelV rnd (#super a0)])
-       | HausFrau => map #id [rndSelV rnd (#super a0), rndSelV rnd (#super a'), rndSelV rnd (#park a0) ]
+      of Employed => (map #id (rndSelV rnd (#super a0) :: selCorp 1) 
+           handle s => raise s)
+       | Student  => (map #id (selCram() `:: [selSch (), rndSelV rnd (#super a0)])
+           handle s => raise s)
+       | HausFrau => (map #id [rndSelV rnd (#super a0), rndSelV rnd (#super a'), rndSelV rnd (#park a0) ]
+           handle s => raise s)
   end
   end
 
   (* 鉄道運行ルール *)
-  val time2next = [(TKY,5),(SJK,10),(JOJ,15),(TAC,20),(HAC,0)]
+
+  (* 503-03-15
+   *    it seems that area_t items in time2next should be
+        monotonic (1,2,3... or 5,4,...).  Otherwise, "makeTrain" 
+        generates malformed train schedules!!
+        - NO! already monotonic. maybe different reasons
+   *)
+  val time2next = [(OUT,30),(TKY,5),(SJK,10),(JOJ,15),(TAC,20),(HAC,10)]
   val services =
     (Vector.fromList o List.concat) 
     (map (fn h => 
       List.concat (map (fn m =>
-       [ {deptime = iR (rI h*hours + rI m*minutes), stations = #[TKY, SJK, JOJ, TAC, HAC]} 
-       , {deptime = iR (rI h*hours + rI m*minutes), stations = #[HAC, TAC, JOJ, SJK, TKY]} 
+       [ {deptime = iR (rI h*hours + rI m*minutes), stations = #[OUT, TKY, SJK, JOJ, TAC, HAC]} 
+       , {deptime = iR (rI h*hours + rI m*minutes), stations = #[HAC, TAC, JOJ, SJK, TKY, OUT]} 
        ]) [0, 20, 40]) 
           (* [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]) *)
      ) [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23])
@@ -352,6 +378,7 @@ structure Trivial = struct
     val betaN = fn () => abs (#betaNHome conf*(1.0 + 0.1*rgauss (getrnd())))
   in
     F.makeHome at betaN (F.makePerson (#nPop conf $ at) rulePerson) ruleHome
+      handle s => raise s
   end
 
   fun place (conf:conf) at home = let 
@@ -381,6 +408,14 @@ structure Trivial = struct
 
   fun train (conf:conf) = F.makeTrains 
     {time2next = time2next, services = services, betaN = #betaNTrain conf, size = 200}
+
+  (* (既存のI/Fをかえずに)鉄道サービースの生成方法をきり替えられるしかけを入れる *)
+  local
+    val ptr = ref train
+  in
+    fun setMakeTrain ptr' = ptr := ptr'
+    fun getMakeTrain () = !ptr
+  end
 
   (* 病院の構成 *)
   fun mkHospital {inpat:int, doc:int, outpat:int} nHosp beta (area:area) = let
@@ -475,8 +510,9 @@ structure Trivial = struct
       {area  = Vector.mapi (fn (i,area) =>
            mkHospital (#hospPop conf) (#hosp (#nPlaces conf $ i)) (#betaNHosp conf) area
               handle s => raise s (* ここで、例外 mkHospitalにバグ有 *)
-         ) (F.makeVisit' (area conf  handle s => raise s) ruleVisit) 
-      ,train = train conf handle s => raise s
+         ) 
+        (F.makeVisit' (area conf  handle s => raise s) ruleVisit) handle s => raise s
+      ,train = getMakeTrain () conf handle s => raise s
       ,time  = 0
       } handle s => raise s;
 

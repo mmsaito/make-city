@@ -9,8 +9,7 @@ val home =
   o OS.Path.fromString o valOf) 
     (OS.Process.getEnv "HOME");
   
-val unreal  = home^"/Documents/Simoto/code-unreal/"; 
-val unreal2 = home^"/Documents/Simoto/code-unreal-2/"; 
+val unreal = "./";
 CM.make (unreal ^ "unreal.cm");
 (* ここまで *)
 
@@ -35,7 +34,8 @@ in
 
   (* 都市のスケーリング *)
   val mapV = Vector.map
-  fun scale x = Int.max(1, iR (rI x*0.1))
+  val scaleCoef = 10.0
+  fun scale x = Int.max(1, iR (rI x*scaleCoef))
   fun scale' x = Int.max (30, scale x)
 
   (* 人口 *)
@@ -70,7 +70,7 @@ in
    *   初期感染者にとって、フィルタリングすることで、実現する。
    *
    *   後述の ※ を参照 *)
-  val nDup = 32
+  val nDup = 1 
   val nInf0 = scale 300
   val infEMP = 
        {kind = OPT_INTERV_INF
@@ -119,7 +119,7 @@ in
     ,nPlaces    = mapV (mapPS scale) nPlaces6
 
     (* 設定につけるタグ。都市ファイルの出力先ディレクトリ名となる。*)
-    ,tag        = "otest"
+    ,tag        = "scale" ^ sR scaleCoef
 (*
       String.concatWith "_" 
         ( map Real.toString [super,park,home,corp,school,train]
@@ -131,8 +131,10 @@ in
   end
 
   val conf0 = genConf {vacRule = nil, vacResponse=NONE, vacHyposensitize=NONE};
+  val () = print ">>>";
   val city = Trivial.city conf0;
-  val _    = Probe.writeCity city ("./" ^ #tag conf0 ^ "/model.city");
+  val () = print "<<<";
+  val done = Probe.writeCity city ("./" ^ #tag conf0 ^ "/model.city");
 
   fun nRolePop cond = Vector.map (length o List.filter cond o Type.popArea) (#area city);
   val nStu = nRolePop (fn PERSON {role=Student,...} => true | _ => false);
@@ -165,4 +167,6 @@ in
      (fn (emp,stu) => JCL1.writeInterv conf0  (emp@stu) ("uncontrolled-" ^ idx()))
        (itvEmpSet, itvStuSet)
   end  
+
+  val gomi = OS.Process.exit (Unsafe.cast 0) ;
 end
